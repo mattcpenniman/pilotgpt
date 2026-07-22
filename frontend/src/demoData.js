@@ -21,7 +21,7 @@ export const demoData = {
   ],
   trips: [
     { id:'t1', customer_name:'Evelyn Hart', origin:'KTEB', destination:'KPBI', departure_at:at(0,8,30), return_at:at(2,16), passengers:5, purpose:'Executive travel', status:'approved', aircraft_id:'a1', pilot_ids:['p1','p5'] },
-    { id:'t2', customer_name:'Marcus Hill', origin:'KHPN', destination:'KBOS', departure_at:at(0,11,15), return_at:at(0,18,30), passengers:3, purpose:'Client meeting', status:'approved', aircraft_id:'a2', pilot_ids:['p2','p4'] },
+    { id:'t2', customer_name:'Marcus Hill', origin:'KHPN', destination:'KBOS', departure_at:at(0,11,15), return_at:at(0,18,30), passengers:3, purpose:'Client meeting', status:'approved', sub_status:'pending_cancellation', aircraft_id:'a2', pilot_ids:['p2','p4'] },
     { id:'t3', customer_name:'Cameron Reid', origin:'KTEB', destination:'KORD', departure_at:at(1,9), return_at:at(2,13), passengers:7, purpose:'Board meeting', status:'requested', aircraft_id:null, pilot_ids:[] },
     { id:'t4', customer_name:'Sofia Laurent', origin:'KMMU', destination:'KACK', departure_at:at(1,13,30), return_at:at(1,19), passengers:4, purpose:'Personal travel', status:'requested', aircraft_id:null, pilot_ids:[] },
     { id:'t5', customer_name:'Theo Walker', origin:'KTEB', destination:'KMIA', departure_at:at(3,7,45), return_at:at(5,15), passengers:6, purpose:'Conference', status:'requested', aircraft_id:null, pilot_ids:[] },
@@ -30,7 +30,8 @@ export const demoData = {
     { id:'f1', trip_id:'t1', flight_number:'PG 271', aircraft_id:'a1', pilot_ids:['p1','p5'], origin:'KTEB', destination:'KPBI', scheduled_departure:at(0,8,30), scheduled_arrival:at(0,11,12), passengers:5, status:'departed' },
     { id:'f2', trip_id:'t2', flight_number:'PG 304', aircraft_id:'a2', pilot_ids:['p2','p4'], origin:'KHPN', destination:'KBOS', scheduled_departure:at(0,11,15), scheduled_arrival:at(0,12,18), passengers:3, status:'scheduled' },
     { id:'f3', trip_id:null, flight_number:'PG 118', aircraft_id:'a4', pilot_ids:['p3'], origin:'KMMU', destination:'KDCA', scheduled_departure:at(0,14,40), scheduled_arrival:at(0,15,52), passengers:4, status:'scheduled' },
-    { id:'f4', trip_id:null, flight_number:'PG 442', aircraft_id:'a1', pilot_ids:['p1'], origin:'KPBI', destination:'KTEB', scheduled_departure:at(2,16), scheduled_arrival:at(2,18,38), passengers:5, status:'scheduled' },
+    { id:'f4', trip_id:'t1', flight_number:'PG 442', aircraft_id:'a1', pilot_ids:['p1'], origin:'KPBI', destination:'KMIA', scheduled_departure:at(2,13), scheduled_arrival:at(2,14,10), passengers:5, status:'scheduled' },
+    { id:'f5', trip_id:'t1', flight_number:'PG 443', aircraft_id:'a1', pilot_ids:['p1','p5'], origin:'KMIA', destination:'KTEB', scheduled_departure:at(2,16), scheduled_arrival:at(2,18,38), passengers:5, status:'scheduled' },
   ],
   fuelLogs: [
     { id:'l1', aircraft_id:'a1', flight_id:'f1', airport:'KTEB', fueled_at:at(-1,17), gallons:321.8, price_per_gallon:6.41, vendor:'Atlantic Aviation', total_cost:2062.74 },

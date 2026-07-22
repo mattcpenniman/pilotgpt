@@ -366,3 +366,112 @@ def test_flight_reschedule_decline_records_request_without_changing_schedule(tmp
     unchanged = client.get(f"/api/v1/flights/{flight['id']}").json()
     assert unchanged["scheduled_departure"] == "2030-09-01T09:00:00-04:00"
     assert unchanged["sub_status"] is None
+
+
+def test_trip_card_substatus_and_requested_trip_editing(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    trip = client.post(
+        "/api/v1/trips",
+        json={
+            "customer_name": "Original Customer",
+            "origin": "KTEB",
+            "destination": "KPBI",
+            "departure_at": "2030-08-01T09:00:00-04:00",
+            "passengers": 3,
+        },
+    ).json()
+
+    edited = client.patch(
+        f"/api/v1/trips/{trip['id']}",
+        json={
+            "customer_name": "Updated Customer",
+            "destination": "KBOS",
+            "sub_status": "needs_rescheduling",
+        },
+    )
+    assert edited.status_code == 200
+    assert edited.json()["customer_name"] == "Updated Customer"
+    assert edited.json()["destination"] == "KBOS"
+    assert edited.json()["sub_status"] == "needs_rescheduling"
+
+    cleared = client.patch(f"/api/v1/trips/{trip['id']}", json={"sub_status": None})
+    assert cleared.status_code == 200
+    assert cleared.json()["sub_status"] is None
+    assert client.patch(
+        f"/api/v1/trips/{trip['id']}",
+        json={"sub_status": "pending_reschedule"},
+    ).status_code == 422
+
+
+def test_approved_trip_allows_substatus_and_more_than_two_flight_legs(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    pilot = client.post(
+        "/api/v1/pilots",
+        json={
+            "first_name": "Avery",
+            "last_name": "Stone",
+            "email": "avery@example.com",
+            "license_number": "ATP-9001",
+            "medical_expires": "2031-01-01",
+        },
+    ).json()
+    aircraft = client.post(
+        "/api/v1/aircraft",
+        json={
+            "tail_number": "N900PG",
+            "make": "Cessna",
+            "model": "Citation Latitude",
+            "passenger_capacity": 9,
+            "home_airport": "KTEB",
+        },
+    ).json()
+    trip = client.post(
+        "/api/v1/trips",
+        json={
+            "customer_name": "Multi Leg Customer",
+            "origin": "KTEB",
+            "destination": "KPBI",
+            "departure_at": "2030-08-01T09:00:00-04:00",
+            "return_at": "2030-08-04T18:00:00-04:00",
+            "passengers": 3,
+        },
+    ).json()
+    client.post(
+        f"/api/v1/trips/{trip['id']}/approve",
+        json={"aircraft_id": aircraft["id"], "pilot_ids": [pilot["id"]], "approved_by": "Dispatch"},
+    )
+
+    status_update = client.patch(
+        f"/api/v1/trips/{trip['id']}",
+        json={"sub_status": "pending_cancellation"},
+    )
+    assert status_update.status_code == 200
+    assert status_update.json()["sub_status"] == "pending_cancellation"
+    blocked_edit = client.patch(f"/api/v1/trips/{trip['id']}", json={"passengers": 4})
+    assert blocked_edit.status_code == 409
+    assert "reschedule request" in blocked_edit.json()["detail"]
+
+    legs = [
+        ("PG501", "KTEB", "KORD", "2030-08-01T09:00:00-04:00", "2030-08-01T11:00:00-04:00"),
+        ("PG502", "KORD", "KDEN", "2030-08-01T13:00:00-04:00", "2030-08-01T15:00:00-04:00"),
+        ("PG503", "KDEN", "KPBI", "2030-08-02T09:00:00-04:00", "2030-08-02T13:00:00-04:00"),
+    ]
+    for number, origin, destination, departure, arrival in legs:
+        response = client.post(
+            "/api/v1/flights",
+            json={
+                "trip_id": trip["id"],
+                "flight_number": number,
+                "aircraft_id": aircraft["id"],
+                "pilot_ids": [pilot["id"]],
+                "origin": origin,
+                "destination": destination,
+                "scheduled_departure": departure,
+                "scheduled_arrival": arrival,
+                "passengers": 3,
+            },
+        )
+        assert response.status_code == 201
+
+    linked = client.get("/api/v1/flights", params={"trip_id": trip["id"]})
+    assert len(linked.json()) == 3

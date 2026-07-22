@@ -11,6 +11,8 @@ The project is a demo application. It uses JSON files for persistence and is des
 - Aircraft and pilot assignment with capacity, availability, medical, and schedule checks
 - Queue for approved trips that still need flight legs
 - Flight scheduling with aircraft and pilot conflict detection
+- OurAirports search and lookup with server-calculated great-circle distance
+- Editable trip cards with operational sub-statuses and unlimited linked flight legs
 - Flight lifecycle tracking from scheduled to departed or completed
 - Auditable trip and flight reschedule requests with requester intent and before/after history
 - Fleet, pilot roster, and fuel-purchase management
@@ -40,6 +42,15 @@ Then open:
 - Health check: <http://localhost:8000/health>
 
 The frontend proxies `/api` requests to the backend inside the Compose network. Application data is stored in `backend/data/` and mounted into the backend container, so changes persist across container restarts.
+
+Airport search and distance features use the OurAirports public-domain dataset. Download it before starting the application:
+
+```bash
+cd backend
+python3 scripts/download_airports.py
+```
+
+The downloaded `backend/data/airports.csv` is intentionally ignored by Git. The rest of the API continues to work if it is absent; airport fields then show an actionable download error. OurAirports updates the file nightly and does not guarantee its accuracy or fitness for aviation use.
 
 Stop the application with:
 
@@ -113,6 +124,8 @@ All application endpoints are under `/api/v1`.
 | `/dashboard` | Aggregated operational totals |
 | `/pilots` | List, create, read, update, and delete pilots |
 | `/aircraft` | List, create, read, update, and delete aircraft |
+| `/airports` | Search and exact airport-code lookup |
+| `/airports/distance` | Great-circle distance between two airports in nautical miles |
 | `/trips` | Manage trip requests and approval workflow |
 | `/flights` | Manage flight legs, filters, and status transitions |
 | `/fuel-logs` | Manage fuel purchases and calculated costs |
@@ -129,6 +142,8 @@ Workflow actions include:
 - `POST /api/v1/reschedule-requests/{id}/resolve`
 
 All API datetimes must include a timezone offset, such as `2030-08-01T09:00:00-04:00`.
+
+Airport distance is informational Haversine great-circle distance. It is not an airway route, flight plan, or flight-time calculation.
 
 ## Testing and builds
 

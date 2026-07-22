@@ -48,6 +48,31 @@ class RescheduleStatus(StrEnum):
 
 class WorkflowSubStatus(StrEnum):
     PENDING_RESCHEDULE = "pending_reschedule"
+    NEEDS_RESCHEDULING = "needs_rescheduling"
+    PENDING_CANCELLATION = "pending_cancellation"
+
+
+class Airport(ApiModel):
+    ident: str
+    type: str
+    name: str
+    latitude_deg: float
+    longitude_deg: float
+    elevation_ft: int | None = None
+    municipality: str | None = None
+    iso_country: str
+    iso_region: str
+    gps_code: str | None = None
+    icao_code: str | None = None
+    iata_code: str | None = None
+    local_code: str | None = None
+    keywords: str | None = Field(default=None, exclude=True)
+
+
+class AirportDistance(ApiModel):
+    origin: Airport
+    destination: Airport
+    distance_nm: float
 
 
 class PilotCreate(ApiModel):
@@ -160,6 +185,7 @@ class TripUpdate(ApiModel):
     passengers: int | None = Field(default=None, ge=1, le=1000)
     purpose: str | None = Field(default=None, max_length=200)
     notes: str | None = Field(default=None, max_length=2000)
+    sub_status: WorkflowSubStatus | None = None
 
     @field_validator("origin", "destination")
     @classmethod

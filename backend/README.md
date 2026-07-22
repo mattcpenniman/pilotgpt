@@ -15,12 +15,28 @@ Open interactive API documentation at <http://localhost:8000/docs> or the OpenAP
 
 To store data elsewhere, set `PILOTGPT_DATA_DIR`. Set comma-separated `CORS_ORIGINS` to allow additional frontend origins; it defaults to `http://localhost:3000`.
 
+## Airport reference data
+
+Airport lookup and distance endpoints use the public-domain OurAirports dataset. Download its nightly `airports.csv` file before using those endpoints:
+
+```bash
+cd backend
+python3 scripts/download_airports.py
+```
+
+This writes `data/airports.csv`, which is intentionally ignored by Git. If `PILOTGPT_DATA_DIR` points elsewhere, download the file and place it at `$PILOTGPT_DATA_DIR/airports.csv`. Missing or invalid data returns an actionable `503` only from airport endpoints; scheduling remains available. Download the file before `docker compose up --build` because Compose mounts `backend/data/` into the backend container.
+
+OurAirports data is updated nightly and is provided without an accuracy or fitness guarantee. Distances are Haversine great-circle distances in nautical miles, not airway routes, flight plans, or flight-time estimates.
+
 ## Main routes
 
 - `GET /health` — liveness check
 - `GET /api/v1/dashboard` — fleet/operations totals
 - `/api/v1/pilots` — list, create, read, update, and delete pilots
 - `/api/v1/aircraft` — list, create, read, update, and delete aircraft
+- `GET /api/v1/airports?query=...` — search airport codes, names, and municipalities
+- `GET /api/v1/airports/{code}` — resolve an ICAO, GPS, IATA, or local code
+- `GET /api/v1/airports/distance?origin=...&destination=...` — calculate great-circle distance
 - `/api/v1/trips` — request, edit, list, read, and delete trips
 - `POST /api/v1/trips/{id}/approve` — assign aircraft/crew and approve
 - `POST /api/v1/trips/{id}/reject` and `/cancel` — trip workflow actions

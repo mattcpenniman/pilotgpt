@@ -5,6 +5,7 @@ import './styles.css';
 import './unscheduled.css';
 import './timeline.css';
 import './trip-details.css';
+import './airport-edit.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode><App /></React.StrictMode>

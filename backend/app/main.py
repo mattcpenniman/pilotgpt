@@ -6,8 +6,9 @@ from pathlib import Path
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
+from .airports import AirportCatalog
 from .models import (
-    Aircraft, AircraftCreate, AircraftStatus, AircraftUpdate, Dashboard,
+    Aircraft, AircraftCreate, AircraftStatus, AircraftUpdate, Airport, AirportDistance, Dashboard,
     Flight, FlightCreate, FlightStatus, FlightStatusUpdate, FlightUpdate,
     FlightRescheduleRequestCreate, FuelLog, FuelLogCreate, FuelLogUpdate,
     Pilot, PilotCreate, PilotUpdate, RescheduleRequest, RescheduleResolution,
@@ -23,12 +24,14 @@ DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 def create_app(data_dir: Path | None = None) -> FastAPI:
     resolved_data_dir = data_dir or Path(os.getenv("PILOTGPT_DATA_DIR", DEFAULT_DATA_DIR))
     service = SchedulingService(JsonStore(resolved_data_dir))
+    airports = AirportCatalog(resolved_data_dir / "airports.csv")
     app = FastAPI(
         title="PilotGPT Jet Scheduling API",
         version="1.0.0",
         description="Demo API for pilots, aircraft, trip approvals, flights, and fuel records.",
     )
     app.state.service = service
+    app.state.airports = airports
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")],
@@ -45,6 +48,24 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     @router.get("/dashboard", response_model=Dashboard, tags=["dashboard"])
     def dashboard() -> Dashboard:
         return service.dashboard()
+
+    @router.get("/airports", response_model=list[Airport], tags=["airports"])
+    def search_airports(
+        query: str = Query(min_length=2, max_length=100),
+        limit: int = Query(default=20, ge=1, le=50),
+    ) -> list[Airport]:
+        return airports.search(query, limit)
+
+    @router.get("/airports/distance", response_model=AirportDistance, tags=["airports"])
+    def airport_distance(
+        origin: str = Query(min_length=2, max_length=20),
+        destination: str = Query(min_length=2, max_length=20),
+    ) -> AirportDistance:
+        return airports.distance(origin, destination)
+
+    @router.get("/airports/{code}", response_model=Airport, tags=["airports"])
+    def get_airport(code: str) -> Airport:
+        return airports.lookup(code)
 
     @router.get("/pilots", response_model=list[Pilot], tags=["pilots"])
     def list_pilots(active: bool | None = None) -> list[Pilot]:
@@ -114,12 +135,7 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
 
     @router.patch("/trips/{trip_id}", response_model=Trip, tags=["trips"])
     def update_trip(trip_id: str, payload: TripUpdate) -> Trip:
-        trip = service.get("trips", trip_id, Trip)
-        if trip.status != TripStatus.REQUESTED:
-            raise HTTPException(status_code=409, detail="Only requested trips can be edited")
-        candidate = trip.model_copy(update=payload.model_dump(exclude_unset=True))
-        service.validate_trip(candidate)
-        return service.update("trips", trip_id, payload, Trip)
+        return service.update_trip(trip_id, payload)
 
     @router.post("/trips/{trip_id}/approve", response_model=Trip, tags=["trips"])
     def approve_trip(trip_id: str, payload: TripApproval) -> Trip:

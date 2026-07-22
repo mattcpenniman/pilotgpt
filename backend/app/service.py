@@ -5,7 +5,7 @@ from typing import Any, TypeVar
 from uuid import uuid4
 
 from fastapi import HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .models import (
     Aircraft,
@@ -27,6 +27,7 @@ from .models import (
     TripApproval,
     TripRescheduleRequestCreate,
     TripStatus,
+    TripUpdate,
     WorkflowSubStatus,
     utc_now,
 )
@@ -84,6 +85,25 @@ class SchedulingService:
         if trip.origin == trip.destination:
             raise HTTPException(status_code=422, detail="origin and destination must differ")
 
+    def update_trip(self, trip_id: str, payload: TripUpdate) -> Trip:
+        trip = self.get("trips", trip_id, Trip)
+        fields = payload.model_fields_set
+        if trip.status in {TripStatus.REJECTED, TripStatus.CANCELLED}:
+            raise HTTPException(status_code=409, detail=f"{trip.status.capitalize()} trips cannot be edited")
+        if trip.status == TripStatus.APPROVED and fields - {"sub_status"}:
+            raise HTTPException(
+                status_code=409,
+                detail="Approved trip itinerary changes require a reschedule request",
+            )
+        if payload.sub_status == WorkflowSubStatus.PENDING_RESCHEDULE:
+            raise HTTPException(status_code=422, detail="pending_reschedule is managed by reschedule requests")
+        try:
+            candidate = Trip.model_validate(trip.model_dump() | payload.model_dump(exclude_unset=True))
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=exc.errors()[0]["msg"]) from exc
+        self.validate_trip(candidate)
+        return self.update("trips", trip_id, payload, Trip)
+
     @staticmethod
     def overlaps(start_a: datetime, end_a: datetime, start_b: datetime, end_b: datetime) -> bool:
         return start_a < end_b and start_b < end_a
@@ -140,6 +160,7 @@ class SchedulingService:
         record = trip.model_dump(mode="json") | {
             "status": TripStatus.REJECTED,
             "rejected_reason": reason,
+            "sub_status": None,
             "updated_at": utc_now().isoformat(),
         }
         rejected = Trip.model_validate(record)
@@ -154,6 +175,7 @@ class SchedulingService:
             raise HTTPException(status_code=409, detail="Rejected trips cannot be cancelled")
         record = trip.model_dump(mode="json") | {
             "status": TripStatus.CANCELLED,
+            "sub_status": None,
             "updated_at": utc_now().isoformat(),
         }
         cancelled = Trip.model_validate(record)
