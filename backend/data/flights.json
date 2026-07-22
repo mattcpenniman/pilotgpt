@@ -1,0 +1,208 @@
+[
+  {
+    "trip_id": "30000000-0000-4000-8000-000000000001",
+    "flight_number": "PGT201",
+    "aircraft_id": "20000000-0000-4000-8000-000000000001",
+    "pilot_ids": [
+      "10000000-0000-4000-8000-000000000001",
+      "10000000-0000-4000-8000-000000000002"
+    ],
+    "origin": "KTEB",
+    "destination": "KORD",
+    "scheduled_departure": "2026-07-20T08:00:00-04:00",
+    "scheduled_arrival": "2026-07-20T10:20:00-05:00",
+    "passengers": 7,
+    "notes": "Catering loaded.",
+    "id": "40000000-0000-4000-8000-000000000001",
+    "status": "completed",
+    "actual_departure": "2026-07-20T08:07:00-04:00",
+    "actual_arrival": "2026-07-20T10:14:00-05:00",
+    "created_at": "2026-07-18T18:45:00+00:00",
+    "updated_at": "2026-07-20T21:34:00+00:00"
+  },
+  {
+    "trip_id": "30000000-0000-4000-8000-000000000001",
+    "flight_number": "PGT202",
+    "aircraft_id": "20000000-0000-4000-8000-000000000001",
+    "pilot_ids": [
+      "10000000-0000-4000-8000-000000000001",
+      "10000000-0000-4000-8000-000000000002"
+    ],
+    "origin": "KORD",
+    "destination": "KTEB",
+    "scheduled_departure": "2026-07-20T15:00:00-05:00",
+    "scheduled_arrival": "2026-07-20T17:30:00-04:00",
+    "passengers": 7,
+    "notes": "Vehicles confirmed.",
+    "id": "40000000-0000-4000-8000-000000000002",
+    "status": "completed",
+    "actual_departure": "2026-07-20T15:11:00-05:00",
+    "actual_arrival": "2026-07-20T17:34:00-04:00",
+    "created_at": "2026-07-18T18:45:00+00:00",
+    "updated_at": "2026-07-20T21:34:00+00:00"
+  },
+  {
+    "trip_id": "30000000-0000-4000-8000-000000000002",
+    "flight_number": "PGT211",
+    "aircraft_id": "20000000-0000-4000-8000-000000000003",
+    "pilot_ids": [
+      "10000000-0000-4000-8000-000000000004"
+    ],
+    "origin": "KTEB",
+    "destination": "KBOS",
+    "scheduled_departure": "2026-07-21T14:30:00-04:00",
+    "scheduled_arrival": "2026-07-21T15:35:00-04:00",
+    "passengers": 6,
+    "notes": "Ramp assistance arranged.",
+    "id": "40000000-0000-4000-8000-000000000003",
+    "status": "completed",
+    "actual_departure": "2026-07-22T00:52:11.564000Z",
+    "actual_arrival": "2026-07-22T00:52:15.107000Z",
+    "created_at": "2026-07-18T18:45:00Z",
+    "updated_at": "2026-07-22T00:52:16.174325Z"
+  },
+  {
+    "trip_id": "30000000-0000-4000-8000-000000000002",
+    "flight_number": "PGT212",
+    "aircraft_id": "20000000-0000-4000-8000-000000000003",
+    "pilot_ids": [
+      "10000000-0000-4000-8000-000000000004"
+    ],
+    "origin": "KBOS",
+    "destination": "KTEB",
+    "scheduled_departure": "2026-07-21T17:45:00-04:00",
+    "scheduled_arrival": "2026-07-21T18:55:00-04:00",
+    "passengers": 6,
+    "notes": "Meeting may run late.",
+    "id": "40000000-0000-4000-8000-000000000004",
+    "status": "scheduled",
+    "actual_departure": null,
+    "actual_arrival": null,
+    "created_at": "2026-07-18T18:45:00+00:00",
+    "updated_at": "2026-07-20T21:34:00+00:00"
+  },
+  {
+    "trip_id": "30000000-0000-4000-8000-000000000003",
+    "flight_number": "PGT221",
+    "aircraft_id": "20000000-0000-4000-8000-000000000002",
+    "pilot_ids": [
+      "10000000-0000-4000-8000-000000000003",
+      "10000000-0000-4000-8000-000000000005"
+    ],
+    "origin": "KHPN",
+    "destination": "KIAD",
+    "scheduled_departure": "2026-07-22T09:00:00-04:00",
+    "scheduled_arrival": "2026-07-22T10:15:00-04:00",
+    "passengers": 5,
+    "notes": "Catering restriction noted.",
+    "id": "40000000-0000-4000-8000-000000000005",
+    "status": "scheduled",
+    "actual_departure": null,
+    "actual_arrival": null,
+    "created_at": "2026-07-18T18:45:00+00:00",
+    "updated_at": "2026-07-20T21:34:00+00:00"
+  },
+  {
+    "trip_id": "30000000-0000-4000-8000-000000000003",
+    "flight_number": "PGT222",
+    "aircraft_id": "20000000-0000-4000-8000-000000000002",
+    "pilot_ids": [
+      "10000000-0000-4000-8000-000000000003",
+      "10000000-0000-4000-8000-000000000005"
+    ],
+    "origin": "KIAD",
+    "destination": "KHPN",
+    "scheduled_departure": "2026-07-22T16:30:00-04:00",
+    "scheduled_arrival": "2026-07-22T17:40:00-04:00",
+    "passengers": 5,
+    "notes": "Ground transport confirmed.",
+    "id": "40000000-0000-4000-8000-000000000006",
+    "status": "scheduled",
+    "actual_departure": null,
+    "actual_arrival": null,
+    "created_at": "2026-07-18T18:45:00+00:00",
+    "updated_at": "2026-07-20T21:34:00+00:00"
+  },
+  {
+    "trip_id": "30000000-0000-4000-8000-000000000004",
+    "flight_number": "PGT231",
+    "aircraft_id": "20000000-0000-4000-8000-000000000001",
+    "pilot_ids": [
+      "10000000-0000-4000-8000-000000000001",
+      "10000000-0000-4000-8000-000000000002"
+    ],
+    "origin": "KTEB",
+    "destination": "KDEN",
+    "scheduled_departure": "2026-07-23T07:00:00-04:00",
+    "scheduled_arrival": "2026-07-23T09:05:00-06:00",
+    "passengers": 8,
+    "notes": "Load equipment first.",
+    "id": "40000000-0000-4000-8000-000000000007",
+    "status": "scheduled",
+    "actual_departure": null,
+    "actual_arrival": null,
+    "created_at": "2026-07-18T18:45:00+00:00",
+    "updated_at": "2026-07-20T21:34:00+00:00"
+  },
+  {
+    "trip_id": "30000000-0000-4000-8000-000000000004",
+    "flight_number": "PGT232",
+    "aircraft_id": "20000000-0000-4000-8000-000000000001",
+    "pilot_ids": [
+      "10000000-0000-4000-8000-000000000001",
+      "10000000-0000-4000-8000-000000000002"
+    ],
+    "origin": "KDEN",
+    "destination": "KTEB",
+    "scheduled_departure": "2026-07-25T13:30:00-06:00",
+    "scheduled_arrival": "2026-07-25T17:20:00-04:00",
+    "passengers": 8,
+    "notes": "Crew report 12:30 local.",
+    "id": "40000000-0000-4000-8000-000000000008",
+    "status": "scheduled",
+    "actual_departure": null,
+    "actual_arrival": null,
+    "created_at": "2026-07-18T18:45:00+00:00",
+    "updated_at": "2026-07-20T21:34:00+00:00"
+  },
+  {
+    "trip_id": "30000000-0000-4000-8000-000000000005",
+    "flight_number": "PGT271",
+    "aircraft_id": "20000000-0000-4000-8000-000000000005",
+    "pilot_ids": [
+      "10000000-0000-4000-8000-000000000004"
+    ],
+    "origin": "KTEB",
+    "destination": "KRIC",
+    "scheduled_departure": "2026-07-27T10:00:00-04:00",
+    "scheduled_arrival": "2026-07-27T11:15:00-04:00",
+    "passengers": 4,
+    "notes": "Camera cases pre-cleared.",
+    "id": "40000000-0000-4000-8000-000000000009",
+    "status": "scheduled",
+    "actual_departure": null,
+    "actual_arrival": null,
+    "created_at": "2026-07-18T18:45:00+00:00",
+    "updated_at": "2026-07-20T21:34:00+00:00"
+  },
+  {
+    "trip_id": "30000000-0000-4000-8000-000000000005",
+    "flight_number": "PGT272",
+    "aircraft_id": "20000000-0000-4000-8000-000000000005",
+    "pilot_ids": [
+      "10000000-0000-4000-8000-000000000004"
+    ],
+    "origin": "KRIC",
+    "destination": "KTEB",
+    "scheduled_departure": "2026-07-27T16:00:00-04:00",
+    "scheduled_arrival": "2026-07-27T17:15:00-04:00",
+    "passengers": 4,
+    "notes": "Vehicles requested planeside.",
+    "id": "40000000-0000-4000-8000-000000000010",
+    "status": "scheduled",
+    "actual_departure": null,
+    "actual_arrival": null,
+    "created_at": "2026-07-18T18:45:00+00:00",
+    "updated_at": "2026-07-20T21:34:00+00:00"
+  }
+]

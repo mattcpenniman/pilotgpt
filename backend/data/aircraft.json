@@ -1,0 +1,67 @@
+[
+  {
+    "tail_number": "N721PG",
+    "make": "Gulfstream",
+    "model": "G280",
+    "year": 2022,
+    "passenger_capacity": 10,
+    "home_airport": "KTEB",
+    "status": "available",
+    "total_hours": 1842.6,
+    "id": "20000000-0000-4000-8000-000000000001",
+    "created_at": "2025-09-15T14:00:00+00:00",
+    "updated_at": "2026-07-20T22:15:00+00:00"
+  },
+  {
+    "tail_number": "N305PG",
+    "make": "Embraer",
+    "model": "Phenom 300E",
+    "year": 2023,
+    "passenger_capacity": 9,
+    "home_airport": "KHPN",
+    "status": "available",
+    "total_hours": 1127.4,
+    "id": "20000000-0000-4000-8000-000000000002",
+    "created_at": "2025-09-15T14:00:00+00:00",
+    "updated_at": "2026-07-20T22:15:00+00:00"
+  },
+  {
+    "tail_number": "N808PG",
+    "make": "Cessna",
+    "model": "Citation Latitude",
+    "year": 2021,
+    "passenger_capacity": 9,
+    "home_airport": "KTEB",
+    "status": "available",
+    "total_hours": 2368.9,
+    "id": "20000000-0000-4000-8000-000000000003",
+    "created_at": "2025-09-15T14:00:00+00:00",
+    "updated_at": "2026-07-20T22:15:00+00:00"
+  },
+  {
+    "tail_number": "N442PG",
+    "make": "Beechcraft",
+    "model": "King Air 350i",
+    "year": 2019,
+    "passenger_capacity": 8,
+    "home_airport": "KMMU",
+    "status": "maintenance",
+    "total_hours": 3195.2,
+    "id": "20000000-0000-4000-8000-000000000004",
+    "created_at": "2025-09-15T14:00:00+00:00",
+    "updated_at": "2026-07-20T22:15:00+00:00"
+  },
+  {
+    "tail_number": "N926PG",
+    "make": "Pilatus",
+    "model": "PC-24",
+    "year": 2024,
+    "passenger_capacity": 8,
+    "home_airport": "KTEB",
+    "status": "available",
+    "total_hours": 684.3,
+    "id": "20000000-0000-4000-8000-000000000005",
+    "created_at": "2025-09-15T14:00:00+00:00",
+    "updated_at": "2026-07-20T22:15:00+00:00"
+  }
+]
