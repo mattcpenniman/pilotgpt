@@ -2,6 +2,7 @@ services:
   backend:
     build:
       context: ./backend
+    user: "${PILOTGPT_UID:-1000}:${PILOTGPT_GID:-1000}"
     environment:
       PILOTGPT_DATA_DIR: /app/data
       CORS_ORIGINS: http://192.168.1.79:3000
