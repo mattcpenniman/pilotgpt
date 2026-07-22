@@ -4,6 +4,7 @@ import App from './App';
 import './styles.css';
 import './unscheduled.css';
 import './timeline.css';
+import './trip-details.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode><App /></React.StrictMode>
