@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { api } from './api';
 import { demoData } from './demoData';
+import './fleet-card.css';
+import './pilot-card.css';
 
 const NAV = [
   { id:'dashboard', label:'Overview', icon:LayoutDashboard },
@@ -223,12 +225,45 @@ function UnscheduledPage({ data, onSchedule }) {
   return <main className="content inner-page"><PageHeading eyebrow="Dispatch queue" title="Approved trips to schedule" copy="Build flight legs for approved travel that has not reached the operations schedule."/><div className="queue-summary"><div><span><Clock3 size={18}/></span><p>Awaiting scheduling<strong>{trips.length}</strong></p></div><div><span><CalendarDays size={18}/></span><p>Next requested departure<strong>{trips.length?dateFmt(trips[0].departure_at,{weekday:'short'}):'All clear'}</strong></p></div><div><span><Users size={18}/></span><p>Travelers waiting<strong>{trips.reduce((sum,t)=>sum+t.passengers,0)}</strong></p></div></div>{trips.length?<section className="panel unscheduled-table"><div className="unscheduled-head"><span>Customer</span><span>Route</span><span>Requested departure</span><span>Passengers</span><span>Aircraft & crew</span><span></span></div>{trips.map(trip=>{const aircraft=data.aircraft.find(a=>a.id===trip.aircraft_id);const pilots=data.pilots.filter(p=>trip.pilot_ids?.includes(p.id));return <div className="unscheduled-row" key={trip.id}><div className="unscheduled-customer"><span className="customer-avatar">{trip.customer_name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><span><b>{trip.customer_name}</b><small>{trip.purpose||'Private charter'}</small></span></div><div className="compact-route"><b>{trip.origin}</b><ArrowRight size={13}/><b>{trip.destination}</b></div><div className="date-cell"><b>{dateFmt(trip.departure_at,{weekday:'short',year:'numeric'})}</b><small>{timeFmt(trip.departure_at)}</small></div><span className="passenger-cell"><Users size={14}/>{trip.passengers}</span><div className="assigned-cell"><span><Plane size={14}/>{aircraft?`${aircraft.tail_number} · ${aircraft.model}`:'Aircraft not assigned'}</span><span><Users size={14}/>{pilots.length?pilots.map(p=>`${p.first_name} ${p.last_name}`).join(', '):'Crew not assigned'}</span></div><button className="schedule-button" disabled={!trip.aircraft_id||!trip.pilot_ids?.length} onClick={()=>onSchedule(trip)}>Schedule leg <ArrowRight size={14}/></button></div>})}</section>:<section className="panel"><Empty icon={Check} title="Every approved trip is scheduled" copy="Newly approved trips will appear here until their first flight leg is created."/></section>}</main>;
 }
 
-function FleetPage({ data, onCreate }) {
-  return <main className="content inner-page"><PageHeading eyebrow="Fleet management" title="Aircraft" copy="Track aircraft readiness, utilization, and home base." action={()=>onCreate('aircraft')} actionLabel="Add aircraft"/><div className="resource-grid">{data.aircraft.map(a=><article className="aircraft-card" key={a.id}><div className="aircraft-visual"><span>{a.make}</span><Plane size={68}/><Badge status={a.status}/></div><div className="aircraft-copy"><div><h3>{a.tail_number}</h3><p>{a.make} {a.model}</p></div><button><MoreHorizontal size={18}/></button><dl><div><dt>HOME BASE</dt><dd>{a.home_airport}</dd></div><div><dt>CAPACITY</dt><dd>{a.passenger_capacity} pax</dd></div><div><dt>TOTAL TIME</dt><dd>{a.total_hours?.toLocaleString()} hrs</dd></div></dl><div className="utilization"><span>Utilization this month <b>{Math.min(Math.round((a.total_hours%100)),92)}%</b></span><i><em style={{width:`${Math.min(Math.round((a.total_hours%100)),92)}%`}}/></i></div></div></article>)}</div>{!data.aircraft.length&&<Empty title="No aircraft yet" copy="Add your first aircraft to begin assigning trips." action={()=>onCreate('aircraft')} actionLabel="Add aircraft"/>}</main>;
+function FleetCard({ aircraft, onEdit }) {
+  return <article className="aircraft-card">
+    <div className="aircraft-visual"><span>{aircraft.year ? `${aircraft.make} · ${aircraft.year}` : aircraft.make}</span><Plane size={68}/><Badge status={aircraft.status}/></div>
+    <div className="aircraft-copy">
+      <div><h3>{aircraft.tail_number}</h3><p>{aircraft.make} {aircraft.model}</p></div>
+      <button className="aircraft-edit" onClick={()=>onEdit(aircraft)} aria-label={`Edit ${aircraft.tail_number}`} title={`Edit ${aircraft.tail_number}`}><MoreHorizontal size={18}/></button>
+      <dl>
+        <div><dt>HOME BASE</dt><dd>{aircraft.home_airport}</dd></div>
+        <div><dt>CAPACITY</dt><dd>{aircraft.passenger_capacity} pax</dd></div>
+        <div><dt>TOTAL TIME</dt><dd>{aircraft.total_hours?.toLocaleString() ?? '—'} hrs</dd></div>
+      </dl>
+      <div className="aircraft-performance">
+        <div><span><Gauge size={15}/></span><p>CRUISE SPEED<b>{aircraft.cruise_speed_kts ? `${aircraft.cruise_speed_kts.toLocaleString()} kt` : 'Not set'}</b></p></div>
+        <div><span><Fuel size={15}/></span><p>FUEL BURN<b>{aircraft.fuel_burn_gph ? `${aircraft.fuel_burn_gph.toLocaleString()} gal/hr` : 'Not set'}</b></p></div>
+      </div>
+    </div>
+  </article>;
+}
+
+function FleetPage({ data, onCreate, onEdit }) {
+  return <main className="content inner-page"><PageHeading eyebrow="Fleet management" title="Aircraft" copy="Track aircraft readiness, performance, and home base." action={()=>onCreate('aircraft')} actionLabel="Add aircraft"/><div className="resource-grid">{data.aircraft.map(aircraft=><FleetCard aircraft={aircraft} onEdit={onEdit} key={aircraft.id}/>)}</div>{!data.aircraft.length&&<Empty title="No aircraft yet" copy="Add your first aircraft to begin assigning trips." action={()=>onCreate('aircraft')} actionLabel="Add aircraft"/>}</main>;
+}
+
+function PilotCard({ pilot, onEdit }) {
+  const certifications=pilot.certifications || [];
+  return <article className="pilot-card">
+    <header><Avatar pilot={pilot}/><div><h3>{pilot.first_name} {pilot.last_name}</h3><a href={`mailto:${pilot.email}`}><Mail size={13}/>{pilot.email}</a></div><div className="pilot-card-actions"><Badge status={pilot.active?'active':'inactive'}/><button onClick={()=>onEdit(pilot)} aria-label={`Edit ${pilot.first_name} ${pilot.last_name}`} title={`Edit ${pilot.first_name} ${pilot.last_name}`}><MoreHorizontal size={18}/></button></div></header>
+    <div className="pilot-card-certifications">{certifications.length?certifications.map(c=><span key={c}>{c}</span>):<span>Certifications pending</span>}</div>
+    <dl><div><dt><ShieldCheck size={14}/> License</dt><dd>{pilot.license_number}</dd></div><div><dt><CalendarDays size={14}/> Medical expires</dt><dd>{dateFmt(pilot.medical_expires,{year:'numeric'})}</dd></div></dl>
+    {pilot.phone&&<a className="pilot-card-phone" href={`tel:${pilot.phone}`}><Phone size={14}/>{pilot.phone}</a>}
+  </article>;
 }
 
 function PilotsPage({ data, onCreate }) {
-  return <main className="content inner-page"><PageHeading eyebrow="Crew management" title="Pilot roster" copy="Manage certifications, medical status, and crew availability." action={()=>onCreate('pilot')} actionLabel="Add pilot"/><section className="panel people-table"><div className="people-head"><span>Pilot</span><span>License</span><span>Certifications</span><span>Medical</span><span>Status</span><span></span></div>{data.pilots.map(p=><div className="person-row" key={p.id}><div><Avatar pilot={p}/><span><b>{p.first_name} {p.last_name}</b><small>{p.email}</small></span></div><code>{p.license_number}</code><div className="chips">{p.certifications.slice(0,2).map(c=><span key={c}>{c}</span>)}</div><span>{dateFmt(p.medical_expires,{year:'numeric'})}</span><Badge status={p.active?'active':'inactive'}/><button><MoreHorizontal size={18}/></button></div>)}</section>{!data.pilots.length&&<Empty icon={Users} title="No pilots yet" copy="Add pilots before approving a trip." action={()=>onCreate('pilot')} actionLabel="Add pilot"/>}</main>;
+  const [pilots,setPilots]=useState(data.pilots);
+  const [editing,setEditing]=useState(null);
+  useEffect(()=>setPilots(data.pilots),[data.pilots]);
+  const save=async(pilot,body)=>{try{const updated=await api.update('pilots',pilot.id,body);setPilots(current=>current.map(item=>item.id===pilot.id?updated:item));setEditing(null);}catch(error){if(error.status){window.alert(error.message);return;}setPilots(current=>current.map(item=>item.id===pilot.id?{...item,...body,updated_at:new Date().toISOString()}:item));setEditing(null);}};
+  return <main className="content inner-page"><PageHeading eyebrow="Crew management" title="Pilot roster" copy="Manage certifications, medical status, and crew availability." action={()=>onCreate('pilot')} actionLabel="Add pilot"/><section className="pilot-grid">{pilots.map(p=><PilotCard pilot={p} onEdit={setEditing} key={p.id}/>)}</section>{!pilots.length&&<Empty icon={Users} title="No pilots yet" copy="Add pilots before approving a trip." action={()=>onCreate('pilot')} actionLabel="Add pilot"/>}{editing&&<EditPilotModal pilot={editing} onClose={()=>setEditing(null)} onSubmit={save}/>}</main>;
 }
 
 function FuelPage({ data, onCreate }) {
@@ -549,6 +584,45 @@ function CreateModal({ type='trip', data, onClose, onSubmit }) {
   </div><div className="modal-actions"><button type="button" onClick={onClose}>Cancel</button><button className="primary" type="submit">{type==='trip'?'Create request':type==='fuel'?'Save fuel log':`Add ${type}`}<ArrowRight size={16}/></button></div></form></div></div>;
 }
 
+function EditAircraftModal({ aircraft, onClose, onSubmit }) {
+  const [form,setForm]=useState({
+    tail_number:aircraft.tail_number,
+    make:aircraft.make,
+    model:aircraft.model,
+    year:aircraft.year ?? '',
+    passenger_capacity:aircraft.passenger_capacity,
+    home_airport:aircraft.home_airport || '',
+    status:aircraft.status,
+    total_hours:aircraft.total_hours ?? 0,
+    cruise_speed_kts:aircraft.cruise_speed_kts ?? '',
+    fuel_burn_gph:aircraft.fuel_burn_gph ?? '',
+  });
+  const set=(key,value)=>setForm(current=>({...current,[key]:value}));
+  const submit=event=>{
+    event.preventDefault();
+    onSubmit(aircraft,{
+      ...form,
+      year:form.year === '' ? null : Number(form.year),
+      passenger_capacity:Number(form.passenger_capacity),
+      total_hours:Number(form.total_hours),
+      cruise_speed_kts:form.cruise_speed_kts === '' ? null : Number(form.cruise_speed_kts),
+      fuel_burn_gph:form.fuel_burn_gph === '' ? null : Number(form.fuel_burn_gph),
+    });
+  };
+  return <div className="modal-backdrop" onMouseDown={event=>event.target===event.currentTarget&&onClose()}><div className="modal"><div className="modal-head"><div><span>Fleet card</span><h2>Edit {aircraft.tail_number}</h2></div><button onClick={onClose} aria-label="Close aircraft editor"><X size={19}/></button></div><form onSubmit={submit}><div className="form-grid">
+    <Input label="Tail number" required value={form.tail_number} onChange={event=>set('tail_number',event.target.value.toUpperCase())}/><Input label="Manufacturer" required value={form.make} onChange={event=>set('make',event.target.value)}/><Input label="Model" required value={form.model} onChange={event=>set('model',event.target.value)}/><Input label="Year" type="number" min="1903" max="2100" value={form.year} onChange={event=>set('year',event.target.value)}/><Input label="Passenger capacity" required type="number" min="1" value={form.passenger_capacity} onChange={event=>set('passenger_capacity',event.target.value)}/><AirportInput label="Home airport" required minLength="3" maxLength="4" value={form.home_airport} onChange={value=>set('home_airport',value)}/><Select label="Status" value={form.status} onChange={event=>set('status',event.target.value)}><option value="available">Available</option><option value="maintenance">Maintenance</option><option value="out_of_service">Out of service</option></Select><Input label="Total hours" required type="number" min="0" step="0.1" value={form.total_hours} onChange={event=>set('total_hours',event.target.value)}/><Input label="Cruise speed (kt)" type="number" min="1" step="0.1" value={form.cruise_speed_kts} onChange={event=>set('cruise_speed_kts',event.target.value)}/><Input label="Fuel burn (gal/hr)" type="number" min="0.1" step="0.1" value={form.fuel_burn_gph} onChange={event=>set('fuel_burn_gph',event.target.value)}/>
+  </div><div className="modal-actions"><button type="button" onClick={onClose}>Cancel</button><button className="primary" type="submit">Save aircraft <ArrowRight size={16}/></button></div></form></div></div>;
+}
+
+function EditPilotModal({ pilot, onClose, onSubmit }) {
+  const [form,setForm]=useState({first_name:pilot.first_name,last_name:pilot.last_name,email:pilot.email,phone:pilot.phone||'',license_number:pilot.license_number,certifications:(pilot.certifications||[]).join(', '),medical_expires:pilot.medical_expires||'',active:pilot.active});
+  const set=(key,value)=>setForm(current=>({...current,[key]:value}));
+  const submit=event=>{event.preventDefault();onSubmit(pilot,{...form,phone:form.phone||null,medical_expires:form.medical_expires||null,certifications:form.certifications.split(',').map(value=>value.trim()).filter(Boolean)});};
+  return <div className="modal-backdrop" onMouseDown={event=>event.target===event.currentTarget&&onClose()}><div className="modal"><div className="modal-head"><div><span>Pilot card</span><h2>Edit {pilot.first_name} {pilot.last_name}</h2></div><button onClick={onClose} aria-label="Close pilot editor"><X size={19}/></button></div><form onSubmit={submit}><div className="form-grid">
+    <Input label="First name" required value={form.first_name} onChange={event=>set('first_name',event.target.value)}/><Input label="Last name" required value={form.last_name} onChange={event=>set('last_name',event.target.value)}/><Input label="Email" required type="email" value={form.email} onChange={event=>set('email',event.target.value)}/><Input label="Phone" value={form.phone} onChange={event=>set('phone',event.target.value)}/><Input label="License number" required value={form.license_number} onChange={event=>set('license_number',event.target.value)}/><Input label="Medical expires" type="date" value={form.medical_expires} onChange={event=>set('medical_expires',event.target.value)}/><Select label="Status" value={form.active?'active':'inactive'} onChange={event=>set('active',event.target.value==='active')}><option value="active">Active</option><option value="inactive">Inactive</option></Select><label className="field full"><span>Certifications</span><input value={form.certifications} onChange={event=>set('certifications',event.target.value)} placeholder="ATP, Citation Latitude"/><small>Separate multiple certifications with commas.</small></label>
+  </div><div className="modal-actions"><button type="button" onClick={onClose}>Cancel</button><button className="primary" type="submit">Save pilot <ArrowRight size={16}/></button></div></form></div></div>;
+}
+
 function EditTripModal({ trip, onClose, onSubmit }) {
   const requested = trip.status === "requested";
   const [form, setForm] = useState({
@@ -620,13 +694,13 @@ function ApproveModal({ trip, data, onClose, onSubmit }) {
   return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><div className="modal approval-modal"><div className="modal-head"><div><span>Approve request</span><h2>{trip.origin} <ArrowRight size={18}/> {trip.destination}</h2></div><button onClick={onClose}><X size={19}/></button></div><div className="approval-summary"><div><span>Customer</span><b>{trip.customer_name}</b></div><div><span>Departure</span><b>{dateFmt(trip.departure_at,{weekday:'short'})}, {timeFmt(trip.departure_at)}</b></div><div><span>Travelers</span><b>{trip.passengers} passengers</b></div></div><div className="approval-section"><label>Assign aircraft</label>{available.length?<div className="choice-list">{available.map(a=><button key={a.id} className={aircraft===a.id?'selected':''} onClick={()=>setAircraft(a.id)}><span className="choice-icon"><Plane size={19}/></span><span><b>{a.tail_number}</b><small>{a.model} · {a.passenger_capacity} seats</small></span>{aircraft===a.id&&<Check size={17}/>}</button>)}</div>:<p className="approval-empty">No available aircraft can accommodate {trip.passengers} passengers.</p>}</div><div className="approval-section"><label>Assign crew</label>{eligible.length?<div className="choice-list crew-choices">{eligible.map(p=><button key={p.id} className={pilots.includes(p.id)?'selected':''} onClick={()=>toggle(p.id)}><Avatar pilot={p}/><span><b>{p.first_name} {p.last_name}</b><small>{p.certifications?.[0] || p.license_number}</small></span>{pilots.includes(p.id)&&<Check size={17}/>}</button>)}</div>:<p className="approval-empty">No active pilots have a valid medical certificate for this departure.</p>}</div><div className="approval-section"><label className="field"><span>Approved by</span><input required maxLength="120" value={approvedBy} onChange={e=>setApprovedBy(e.target.value)} placeholder="Approver name"/></label></div><div className="modal-actions"><button onClick={onClose}>Cancel</button><button className="primary" disabled={!aircraft||!pilots.length||!approvedBy.trim()} onClick={()=>onSubmit(trip,{aircraft_id:aircraft,pilot_ids:pilots,approved_by:approvedBy.trim()})}>Approve trip <Check size={16}/></button></div></div></div>;
 }
 
-function TripDetailsModal({ trip, data, onClose }) {
+function TripDetailsModal({ trip, data, onClose, onEdit }) {
   const aircraft=data.aircraft.find(a=>a.id===trip.aircraft_id);
   const pilots=data.pilots.filter(p=>trip.pilot_ids?.includes(p.id));
   const flights=data.flights.filter(f=>f.trip_id===trip.id).sort((a,b)=>new Date(a.scheduled_departure)-new Date(b.scheduled_departure));
   const workflow=getTripTimelineState(trip,data.flights);
   return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><article className="modal trip-detail-modal" role="dialog" aria-modal="true" aria-labelledby="trip-detail-title">
-    <div className="trip-detail-head"><div><span>Trip card</span><h2 id="trip-detail-title">{trip.customer_name}</h2><p>{trip.purpose||'Private charter'}</p></div><div><Badge status={trip.status}/><button aria-label="Close trip details" onClick={onClose}><X size={19}/></button></div></div>
+    <div className="trip-detail-head"><div><span>Trip card</span><h2 id="trip-detail-title">{trip.customer_name}</h2><p>{trip.purpose||'Private charter'}</p></div><div><Badge status={trip.status}/>{!['rejected','cancelled'].includes(trip.status)&&<button aria-label={`Edit ${trip.customer_name} trip`} onClick={()=>onEdit(trip)}><Pencil size={17}/></button>}<button aria-label="Close trip details" onClick={onClose}><X size={19}/></button></div></div>
     <div className="trip-detail-route"><div><small>Origin</small><strong>{trip.origin}</strong><span>{dateTimeFmt(trip.departure_at)}</span></div><div className="trip-detail-flightpath"><i/><span><Plane size={20}/></span><i/></div><div><small>Destination</small><strong>{trip.destination}</strong><span>{trip.return_at?`Return ${dateTimeFmt(trip.return_at)}`:'One way'}</span></div></div>
     <div className="trip-detail-stage"><span>Current stage</span><b>{title(workflow.stage)}</b><i/><span>Sub-status</span><b>{workflow.detail}</b></div>
     <div className="trip-detail-body">
@@ -651,8 +725,9 @@ export default function App() {
   const reject=async trip=>{if(!confirm(`Decline ${trip.customer_name}'s trip request?`))return;if(demo){setData(d=>({...d,trips:d.trips.map(t=>t.id===trip.id?{...t,status:'rejected'}:t)}));notify('Trip request declined.');return;}try{await api.rejectTrip(trip.id,'Declined by operations');notify('Trip request declined.');load(false)}catch(e){notify(e.message,'error')}};
   const status=async(flight,next)=>{if(demo){setData(d=>({...d,flights:d.flights.map(f=>f.id===flight.id?{...f,status:next}:f)}));notify(`Flight marked ${next}.`);return;}try{await api.flightStatus(flight.id,next);notify(`Flight marked ${next}.`);load(false)}catch(e){notify(e.message,'error')}};
   const updateTrip=async(trip,body)=>{if(demo){setData(current=>({...current,trips:current.trips.map(item=>item.id===trip.id?{...item,...body,updated_at:new Date().toISOString()}:item)}));setModal(null);notify('Trip updated in the demo workspace.');return;}try{await api.update('trips',trip.id,body);setModal(null);notify('Trip updated.');load(false)}catch(e){notify(e.message,'error')}};
+  const updateAircraft=async(aircraft,body)=>{if(demo){setData(current=>({...current,aircraft:current.aircraft.map(item=>item.id===aircraft.id?{...item,...body,updated_at:new Date().toISOString()}:item)}));setModal(null);notify('Aircraft updated in the demo workspace.');return;}try{await api.update('aircraft',aircraft.id,body);setModal(null);notify('Aircraft updated.');load(false)}catch(e){notify(e.message,'error')}};
   const openCreate=(type='trip')=>setModal({type});
   const openDetails=trip=>setModal({type:'trip-details',trip});
   const setDemoMode=value=>{if(value){setData(demoData);setDemo(true)}else load()};
-  return <div className="app-shell"><Sidebar current={view} setCurrent={setView} open={sidebarOpen} close={()=>setSidebarOpen(false)} data={data}/><div className="app-main"><Header current={view} query={query} setQuery={setQuery} onCreate={()=>openCreate("trip")} demo={demo} setDemo={setDemoMode} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}/>{loading?<div className="loader"><span/><p>Preparing your operation…</p></div>:<>{error&&demo&&<div className="connection-note"><Activity size={15}/> Live API unavailable — showing a fully interactive demo workspace.<button onClick={()=>load()}><RefreshCw size={14}/> Retry</button></div>}{view==="dashboard"&&<Overview data={displayed} setView={setView} onApprove={trip=>setModal({type:"approve",trip})} onReject={reject} onCreate={()=>openCreate("trip")} onStatus={status} onDetails={openDetails} useDemo={demo}/>} {view==="schedule"&&<SchedulePage data={displayed} onStatus={status} onCreate={()=>openCreate("trip")} onDetails={openDetails}/>} {view==="timeline"&&<TripTimelinePage data={displayed} onDetails={openDetails}/>} {view==="unscheduled"&&<UnscheduledPage data={displayed} onSchedule={trip=>setModal({type:"schedule-trip",trip})}/>} {view==="trips"&&<TripsPage data={displayed} onApprove={trip=>setModal({type:"approve",trip})} onReject={reject} onCreate={()=>openCreate("trip")} onDetails={openDetails} onEdit={trip=>setModal({type:"edit-trip",trip})} onAddLeg={trip=>setModal({type:"schedule-trip",trip})}/>} {view==="fleet"&&<FleetPage data={displayed} onCreate={openCreate}/>} {view==="pilots"&&<PilotsPage data={displayed} onCreate={openCreate}/>} {view==="fuel"&&<FuelPage data={displayed} onCreate={openCreate}/>}</>}</div>{sidebarOpen&&<div className="sidebar-scrim" onClick={()=>setSidebarOpen(false)}/>} {modal?.type==="approve"?<ApproveModal trip={modal.trip} data={data} onClose={()=>setModal(null)} onSubmit={approve}/>:modal?.type==="schedule-trip"?<ScheduleTripModal trip={modal.trip} data={data} onClose={()=>setModal(null)} onSubmit={create}/>:modal?.type==="edit-trip"?<EditTripModal trip={modal.trip} onClose={()=>setModal(null)} onSubmit={updateTrip}/>:modal?.type==="trip-details"?<TripDetailsModal trip={modal.trip} data={data} onClose={()=>setModal(null)}/>:modal&&<CreateModal type={modal.type} data={data} onClose={()=>setModal(null)} onSubmit={create}/>}<Toast toast={toast} onClose={()=>setToast(null)}/></div>;
+  return <div className="app-shell"><Sidebar current={view} setCurrent={setView} open={sidebarOpen} close={()=>setSidebarOpen(false)} data={data}/><div className="app-main"><Header current={view} query={query} setQuery={setQuery} onCreate={()=>openCreate("trip")} demo={demo} setDemo={setDemoMode} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}/>{loading?<div className="loader"><span/><p>Preparing your operation…</p></div>:<>{error&&demo&&<div className="connection-note"><Activity size={15}/> Live API unavailable — showing a fully interactive demo workspace.<button onClick={()=>load()}><RefreshCw size={14}/> Retry</button></div>}{view==="dashboard"&&<Overview data={displayed} setView={setView} onApprove={trip=>setModal({type:"approve",trip})} onReject={reject} onCreate={()=>openCreate("trip")} onStatus={status} onDetails={openDetails} useDemo={demo}/>} {view==="schedule"&&<SchedulePage data={displayed} onStatus={status} onCreate={()=>openCreate("trip")} onDetails={openDetails}/>} {view==="timeline"&&<TripTimelinePage data={displayed} onDetails={openDetails}/>} {view==="unscheduled"&&<UnscheduledPage data={displayed} onSchedule={trip=>setModal({type:"schedule-trip",trip})}/>} {view==="trips"&&<TripsPage data={displayed} onApprove={trip=>setModal({type:"approve",trip})} onReject={reject} onCreate={()=>openCreate("trip")} onDetails={openDetails} onEdit={trip=>setModal({type:"edit-trip",trip})} onAddLeg={trip=>setModal({type:"schedule-trip",trip})}/>} {view==="fleet"&&<FleetPage data={displayed} onCreate={openCreate} onEdit={aircraft=>setModal({type:"edit-aircraft",aircraft})}/>} {view==="pilots"&&<PilotsPage data={displayed} onCreate={openCreate}/>} {view==="fuel"&&<FuelPage data={displayed} onCreate={openCreate}/>}</>}</div>{sidebarOpen&&<div className="sidebar-scrim" onClick={()=>setSidebarOpen(false)}/>} {modal?.type==="approve"?<ApproveModal trip={modal.trip} data={data} onClose={()=>setModal(null)} onSubmit={approve}/>:modal?.type==="schedule-trip"?<ScheduleTripModal trip={modal.trip} data={data} onClose={()=>setModal(null)} onSubmit={create}/>:modal?.type==="edit-trip"?<EditTripModal trip={modal.trip} onClose={()=>setModal(null)} onSubmit={updateTrip}/>:modal?.type==="edit-aircraft"?<EditAircraftModal aircraft={modal.aircraft} onClose={()=>setModal(null)} onSubmit={updateAircraft}/>:modal?.type==="trip-details"?<TripDetailsModal trip={modal.trip} data={data} onClose={()=>setModal(null)} onEdit={trip=>setModal({type:"edit-trip",trip})}/>:modal&&<CreateModal type={modal.type} data={data} onClose={()=>setModal(null)} onSubmit={create}/>}<Toast toast={toast} onClose={()=>setToast(null)}/></div>;
 }

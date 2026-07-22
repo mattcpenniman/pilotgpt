@@ -1,0 +1,102 @@
+.aircraft-edit {
+  display: flex;
+  align-items: center;
+  color: #5f6b65;
+}
+
+.aircraft-home {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 13px;
+  padding: 11px 12px;
+  border: 1px solid #e3e8df;
+  border-radius: 8px;
+  background: #f7f9f5;
+}
+
+.aircraft-home > span {
+  width: 31px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--dark);
+  color: var(--lime);
+}
+
+.aircraft-home p {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  color: #89928d;
+  font-size: 7px;
+  letter-spacing: .7px;
+}
+
+.aircraft-home b {
+  color: #202b26;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.aircraft-copy dl {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.aircraft-performance {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.aircraft-performance > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px;
+  border-radius: 8px;
+  background: #f5f7f3;
+}
+
+.aircraft-performance > div > span {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: #e9efdd;
+  color: #71834f;
+}
+
+.aircraft-performance p {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  color: #929a95;
+  font-size: 6px;
+  letter-spacing: .7px;
+}
+
+.aircraft-performance b {
+  overflow: hidden;
+  color: #25302b;
+  font-size: 9px;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 360px) {
+  .aircraft-performance {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,116 @@
+.pilot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.pilot-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--paper);
+}
+
+.pilot-card header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.pilot-card header > div {
+  min-width: 0;
+}
+
+.pilot-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pilot-card-actions button {
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: #68736d;
+}
+
+.pilot-card h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.pilot-card a {
+  color: #7b8580;
+  text-decoration: none;
+}
+
+.pilot-card header a {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pilot-card-certifications {
+  min-height: 49px;
+  margin: 17px 0;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eceeeb;
+}
+
+.pilot-card-certifications span {
+  display: inline-block;
+  margin: 0 5px 5px 0;
+  padding: 5px 7px;
+  border-radius: 5px;
+  background: #f0f3ed;
+  color: #55625b;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.pilot-card dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 0;
+}
+
+.pilot-card dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #8a938e;
+  font-size: 7px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.pilot-card dd {
+  margin: 5px 0 0;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+}
+
+.pilot-card-phone {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 15px;
+  font-size: 8px;
+}
+
+@media (max-width: 1120px) {
+  .pilot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .pilot-grid { grid-template-columns: 1fr; }
+}
