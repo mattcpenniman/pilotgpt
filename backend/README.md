@@ -28,6 +28,8 @@ This writes `data/airports.csv`, which is intentionally ignored by Git. If `PILO
 
 OurAirports data is updated nightly and is provided without an accuracy or fitness guarantee. Distances are Haversine great-circle distances in nautical miles, not airway routes, flight plans, or flight-time estimates.
 
+Flight scheduling stores `distance_nm`, `estimated_flight_time_minutes`, `estimated_leg_time_minutes`, and `estimated_fuel_usage_gallons`. The backend calculates these from airport coordinates plus the aircraft's `cruise_speed_kts` and `fuel_burn_gph`; leg time includes a fixed 30-minute ground allowance. These are demo planning values and exclude routing, wind, weather, holding, alternate, and reserve requirements.
+
 ## Main routes
 
 - `GET /health` — liveness check

@@ -12,6 +12,7 @@ The project is a demo application. It uses JSON files for persistence and is des
 - Queue for approved trips that still need flight legs
 - Flight scheduling with aircraft and pilot conflict detection
 - OurAirports search and lookup with server-calculated great-circle distance
+- Stored flight-planning estimates for airborne time, total leg time, and fuel usage
 - Editable trip cards with operational sub-statuses and unlimited linked flight legs
 - Flight lifecycle tracking from scheduled to departed or completed
 - Auditable trip and flight reschedule requests with requester intent and before/after history
@@ -144,6 +145,8 @@ Workflow actions include:
 All API datetimes must include a timezone offset, such as `2030-08-01T09:00:00-04:00`.
 
 Airport distance is informational Haversine great-circle distance. It is not an airway route, flight plan, or flight-time calculation.
+
+When a flight is scheduled, the backend snapshots planning estimates using the airport great-circle distance and the assigned aircraft's cruise speed and hourly fuel burn. Estimated leg time adds a fixed 30-minute ground allowance. These demo estimates exclude routing, wind, weather, holding, alternate, and reserve requirements.
 
 ## Testing and builds
 

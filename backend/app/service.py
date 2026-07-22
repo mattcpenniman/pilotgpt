@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import HTTPException, status
 from pydantic import BaseModel, ValidationError
 
+from .airports import AirportCatalog
 from .models import (
     Aircraft,
     AircraftStatus,
@@ -38,8 +39,11 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 class SchedulingService:
-    def __init__(self, store: JsonStore):
+    FLIGHT_GROUND_ALLOWANCE_MINUTES = 30
+
+    def __init__(self, store: JsonStore, airports: AirportCatalog | None = None):
         self.store = store
+        self.airports = airports
 
     def list(self, collection: str, model: type[ModelT]) -> list[ModelT]:
         return [model.model_validate(item) for item in self.store.all(collection)]
@@ -313,12 +317,22 @@ class SchedulingService:
             else:
                 if target.status != FlightStatus.SCHEDULED:
                     raise HTTPException(status_code=409, detail="Only scheduled flights can be rescheduled")
-                candidate = Flight.model_validate(target.model_dump() | request.requested_changes)
+                candidate = self._flight_with_estimates(target.model_dump(mode="json") | request.requested_changes)
                 self.validate_flight(candidate, exclude_id=target.id)
             for field, after in request.requested_changes.items():
                 before = target_record.get(field)
                 if before != after:
                     event_changes.append(RescheduleChange(field=field, before=before, after=after))
+            if request.target_type == RescheduleTarget.FLIGHT:
+                for field in (
+                    "distance_nm",
+                    "estimated_flight_time_minutes",
+                    "estimated_leg_time_minutes",
+                    "estimated_fuel_usage_gallons",
+                ):
+                    after = getattr(candidate, field)
+                    if target_record.get(field) != after:
+                        event_changes.append(RescheduleChange(field=field, before=target_record.get(field), after=after))
             updated_target = candidate.model_dump(mode="json") | {
                 "sub_status": None,
                 "updated_at": now.isoformat(),
@@ -384,6 +398,58 @@ class SchedulingService:
                 raise HTTPException(status_code=409, detail="Aircraft has a conflicting flight")
             if set(other.pilot_ids) & set(flight.pilot_ids):
                 raise HTTPException(status_code=409, detail="A pilot has a conflicting flight")
+
+    def _flight_with_estimates(self, record: dict[str, Any]) -> Flight:
+        distance_nm = None
+        if self.airports:
+            try:
+                distance_nm = self.airports.distance(record["origin"], record["destination"]).distance_nm
+            except HTTPException:
+                pass
+        aircraft = self.get("aircraft", record["aircraft_id"], Aircraft)
+        flight_minutes = None
+        leg_minutes = None
+        fuel_gallons = None
+        if distance_nm and aircraft.cruise_speed_kts and aircraft.fuel_burn_gph:
+            flight_hours = distance_nm / aircraft.cruise_speed_kts
+            flight_minutes = round(flight_hours * 60, 2)
+            leg_minutes = round(flight_minutes + self.FLIGHT_GROUND_ALLOWANCE_MINUTES, 2)
+            fuel_gallons = round(flight_hours * aircraft.fuel_burn_gph, 2)
+        return Flight.model_validate(
+            record
+            | {
+                "distance_nm": distance_nm,
+                "estimated_flight_time_minutes": flight_minutes,
+                "estimated_leg_time_minutes": leg_minutes,
+                "estimated_fuel_usage_gallons": fuel_gallons,
+            }
+        )
+
+    def create_flight(self, payload: FlightCreate) -> Flight:
+        self.ensure_unique("flights", "flight_number", payload.flight_number)
+        self.validate_flight(payload)
+        now = utc_now()
+        record = payload.model_dump(mode="json") | {
+            "id": str(uuid4()),
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+        }
+        created = self._flight_with_estimates(record)
+        self.store.create("flights", created.model_dump(mode="json"))
+        return created
+
+    def update_flight(self, flight_id: str, payload: BaseModel) -> Flight:
+        existing = self.get("flights", flight_id, Flight)
+        if existing.status != FlightStatus.SCHEDULED:
+            raise HTTPException(status_code=409, detail="Only scheduled flights can be edited")
+        flight_number = getattr(payload, "flight_number", None)
+        if flight_number is not None:
+            self.ensure_unique("flights", "flight_number", flight_number, flight_id)
+        record = existing.model_dump(mode="json") | payload.model_dump(mode="json", exclude_unset=True)
+        updated = self._flight_with_estimates(record | {"updated_at": utc_now().isoformat()})
+        self.validate_flight(updated, exclude_id=flight_id)
+        self.store.replace("flights", flight_id, updated.model_dump(mode="json"))
+        return updated
 
     def change_flight_status(self, flight_id: str, new_status: FlightStatus, occurred_at: datetime | None) -> Flight:
         flight = self.get("flights", flight_id, Flight)

@@ -112,6 +112,8 @@ class AircraftCreate(ApiModel):
     home_airport: str = Field(min_length=3, max_length=4)
     status: AircraftStatus = AircraftStatus.AVAILABLE
     total_hours: float = Field(default=0, ge=0)
+    cruise_speed_kts: float | None = Field(default=None, gt=0)
+    fuel_burn_gph: float | None = Field(default=None, gt=0)
 
     @field_validator("tail_number", "home_airport")
     @classmethod
@@ -128,6 +130,8 @@ class AircraftUpdate(ApiModel):
     home_airport: str | None = Field(default=None, min_length=3, max_length=4)
     status: AircraftStatus | None = None
     total_hours: float | None = Field(default=None, ge=0)
+    cruise_speed_kts: float | None = Field(default=None, gt=0)
+    fuel_burn_gph: float | None = Field(default=None, gt=0)
 
     @field_validator("tail_number", "home_airport")
     @classmethod
@@ -241,6 +245,10 @@ class FlightCreate(ApiModel):
     scheduled_arrival: datetime
     passengers: int = Field(default=0, ge=0, le=1000)
     notes: str | None = Field(default=None, max_length=2000)
+    distance_nm: float | None = Field(default=None, gt=0)
+    estimated_flight_time_minutes: float | None = Field(default=None, gt=0)
+    estimated_leg_time_minutes: float | None = Field(default=None, gt=0)
+    estimated_fuel_usage_gallons: float | None = Field(default=None, gt=0)
 
     @field_validator("origin", "destination")
     @classmethod

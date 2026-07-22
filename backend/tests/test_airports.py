@@ -107,3 +107,97 @@ def test_missing_airport_data_is_actionable_and_does_not_break_api(tmp_path: Pat
     assert response.status_code == 503
     assert "python scripts/download_airports.py" in response.json()["detail"]
     assert "airports.csv" in response.json()["detail"]
+
+
+def test_flight_estimates_are_calculated_and_stored(tmp_path: Path) -> None:
+    write_airports(tmp_path / "airports.csv")
+    client = TestClient(create_app(tmp_path))
+    pilot = client.post(
+        "/api/v1/pilots",
+        json={
+            "first_name": "Estimate",
+            "last_name": "Pilot",
+            "email": "estimate@example.com",
+            "license_number": "ATP-ESTIMATE",
+        },
+    ).json()
+    aircraft = client.post(
+        "/api/v1/aircraft",
+        json={
+            "tail_number": "N500ES",
+            "make": "Demo",
+            "model": "Jet",
+            "passenger_capacity": 8,
+            "home_airport": "KTEB",
+            "cruise_speed_kts": 450,
+            "fuel_burn_gph": 200,
+        },
+    ).json()
+
+    response = client.post(
+        "/api/v1/flights",
+        json={
+            "flight_number": "PG-EST",
+            "aircraft_id": aircraft["id"],
+            "pilot_ids": [pilot["id"]],
+            "origin": "KTEB",
+            "destination": "KPBI",
+            "scheduled_departure": "2030-08-01T09:00:00-04:00",
+            "scheduled_arrival": "2030-08-01T12:00:00-04:00",
+            "passengers": 4,
+            "distance_nm": 1,
+            "estimated_flight_time_minutes": 1,
+            "estimated_leg_time_minutes": 1,
+            "estimated_fuel_usage_gallons": 1,
+        },
+    )
+
+    assert response.status_code == 201
+    flight = response.json()
+    assert 900 < flight["distance_nm"] < 905
+    assert flight["estimated_flight_time_minutes"] == 120.23
+    assert flight["estimated_leg_time_minutes"] == 150.23
+    assert flight["estimated_fuel_usage_gallons"] == 400.77
+
+    stored = client.get(f"/api/v1/flights/{flight['id']}").json()
+    assert stored["distance_nm"] == flight["distance_nm"]
+    assert stored["estimated_fuel_usage_gallons"] == flight["estimated_fuel_usage_gallons"]
+
+
+def test_flight_scheduling_survives_missing_estimate_inputs(tmp_path: Path) -> None:
+    client = TestClient(create_app(tmp_path))
+    pilot = client.post(
+        "/api/v1/pilots",
+        json={
+            "first_name": "Fallback",
+            "last_name": "Pilot",
+            "email": "fallback@example.com",
+            "license_number": "ATP-FALLBACK",
+        },
+    ).json()
+    aircraft = client.post(
+        "/api/v1/aircraft",
+        json={
+            "tail_number": "N501ES",
+            "make": "Demo",
+            "model": "Jet",
+            "passenger_capacity": 8,
+            "home_airport": "KTEB",
+        },
+    ).json()
+    response = client.post(
+        "/api/v1/flights",
+        json={
+            "flight_number": "PG-NO-EST",
+            "aircraft_id": aircraft["id"],
+            "pilot_ids": [pilot["id"]],
+            "origin": "KTEB",
+            "destination": "KPBI",
+            "scheduled_departure": "2030-08-02T09:00:00-04:00",
+            "scheduled_arrival": "2030-08-02T12:00:00-04:00",
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["distance_nm"] is None
+    assert response.json()["estimated_flight_time_minutes"] is None
+    assert response.json()["estimated_fuel_usage_gallons"] is None

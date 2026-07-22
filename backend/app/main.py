@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query, Response, status
+from fastapi import APIRouter, FastAPI, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from .airports import AirportCatalog
@@ -23,8 +23,8 @@ DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 def create_app(data_dir: Path | None = None) -> FastAPI:
     resolved_data_dir = data_dir or Path(os.getenv("PILOTGPT_DATA_DIR", DEFAULT_DATA_DIR))
-    service = SchedulingService(JsonStore(resolved_data_dir))
     airports = AirportCatalog(resolved_data_dir / "airports.csv")
+    service = SchedulingService(JsonStore(resolved_data_dir), airports)
     app = FastAPI(
         title="PilotGPT Jet Scheduling API",
         version="1.0.0",
@@ -188,9 +188,7 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
 
     @router.post("/flights", response_model=Flight, status_code=status.HTTP_201_CREATED, tags=["flights"])
     def create_flight(payload: FlightCreate) -> Flight:
-        service.ensure_unique("flights", "flight_number", payload.flight_number)
-        service.validate_flight(payload)
-        return service.create("flights", payload, Flight)
+        return service.create_flight(payload)
 
     @router.get("/flights/{flight_id}", response_model=Flight, tags=["flights"])
     def get_flight(flight_id: str) -> Flight:
@@ -198,14 +196,7 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
 
     @router.patch("/flights/{flight_id}", response_model=Flight, tags=["flights"])
     def update_flight(flight_id: str, payload: FlightUpdate) -> Flight:
-        existing = service.get("flights", flight_id, Flight)
-        if existing.status != FlightStatus.SCHEDULED:
-            raise HTTPException(status_code=409, detail="Only scheduled flights can be edited")
-        if payload.flight_number is not None:
-            service.ensure_unique("flights", "flight_number", payload.flight_number, flight_id)
-        candidate = existing.model_copy(update=payload.model_dump(exclude_unset=True))
-        service.validate_flight(candidate, exclude_id=flight_id)
-        return service.update("flights", flight_id, payload, Flight)
+        return service.update_flight(flight_id, payload)
 
     @router.post("/flights/{flight_id}/status", response_model=Flight, tags=["flights"])
     def change_flight_status(flight_id: str, payload: FlightStatusUpdate) -> Flight:
