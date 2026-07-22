@@ -25,6 +25,7 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     resolved_data_dir = data_dir or Path(os.getenv("PILOTGPT_DATA_DIR", DEFAULT_DATA_DIR))
     airports = AirportCatalog(resolved_data_dir / "airports.csv")
     service = SchedulingService(JsonStore(resolved_data_dir), airports)
+    service.backfill_flight_estimates()
     app = FastAPI(
         title="PilotGPT Jet Scheduling API",
         version="1.0.0",

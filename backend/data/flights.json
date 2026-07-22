@@ -13,12 +13,17 @@
     "scheduled_arrival": "2026-07-20T10:20:00-05:00",
     "passengers": 7,
     "notes": "Catering loaded.",
+    "distance_nm": 626.33,
+    "estimated_flight_time_minutes": 77.97,
+    "estimated_leg_time_minutes": 107.97,
+    "estimated_fuel_usage_gallons": 363.84,
     "id": "40000000-0000-4000-8000-000000000001",
     "status": "completed",
     "actual_departure": "2026-07-20T08:07:00-04:00",
     "actual_arrival": "2026-07-20T10:14:00-05:00",
-    "created_at": "2026-07-18T18:45:00+00:00",
-    "updated_at": "2026-07-20T21:34:00+00:00"
+    "sub_status": null,
+    "created_at": "2026-07-18T18:45:00Z",
+    "updated_at": "2026-07-20T21:34:00Z"
   },
   {
     "trip_id": "30000000-0000-4000-8000-000000000001",
@@ -34,12 +39,17 @@
     "scheduled_arrival": "2026-07-20T17:30:00-04:00",
     "passengers": 7,
     "notes": "Vehicles confirmed.",
+    "distance_nm": 626.33,
+    "estimated_flight_time_minutes": 77.97,
+    "estimated_leg_time_minutes": 107.97,
+    "estimated_fuel_usage_gallons": 363.84,
     "id": "40000000-0000-4000-8000-000000000002",
     "status": "completed",
     "actual_departure": "2026-07-20T15:11:00-05:00",
     "actual_arrival": "2026-07-20T17:34:00-04:00",
-    "created_at": "2026-07-18T18:45:00+00:00",
-    "updated_at": "2026-07-20T21:34:00+00:00"
+    "sub_status": null,
+    "created_at": "2026-07-18T18:45:00Z",
+    "updated_at": "2026-07-20T21:34:00Z"
   },
   {
     "trip_id": "30000000-0000-4000-8000-000000000002",
@@ -54,10 +64,15 @@
     "scheduled_arrival": "2026-07-21T15:35:00-04:00",
     "passengers": 6,
     "notes": "Ramp assistance arranged.",
+    "distance_nm": 164.37,
+    "estimated_flight_time_minutes": 22.11,
+    "estimated_leg_time_minutes": 52.11,
+    "estimated_fuel_usage_gallons": 81.08,
     "id": "40000000-0000-4000-8000-000000000003",
     "status": "completed",
     "actual_departure": "2026-07-22T00:52:11.564000Z",
     "actual_arrival": "2026-07-22T00:52:15.107000Z",
+    "sub_status": null,
     "created_at": "2026-07-18T18:45:00Z",
     "updated_at": "2026-07-22T00:52:16.174325Z"
   },
@@ -74,12 +89,17 @@
     "scheduled_arrival": "2026-07-21T18:55:00-04:00",
     "passengers": 6,
     "notes": "Meeting may run late.",
+    "distance_nm": 164.37,
+    "estimated_flight_time_minutes": 22.11,
+    "estimated_leg_time_minutes": 52.11,
+    "estimated_fuel_usage_gallons": 81.08,
     "id": "40000000-0000-4000-8000-000000000004",
     "status": "scheduled",
     "actual_departure": null,
     "actual_arrival": null,
-    "created_at": "2026-07-18T18:45:00+00:00",
-    "updated_at": "2026-07-20T21:34:00+00:00"
+    "sub_status": null,
+    "created_at": "2026-07-18T18:45:00Z",
+    "updated_at": "2026-07-20T21:34:00Z"
   },
   {
     "trip_id": "30000000-0000-4000-8000-000000000003",
@@ -95,12 +115,17 @@
     "scheduled_arrival": "2026-07-22T10:15:00-04:00",
     "passengers": 5,
     "notes": "Catering restriction noted.",
+    "distance_nm": 214.33,
+    "estimated_flight_time_minutes": 27.72,
+    "estimated_leg_time_minutes": 57.72,
+    "estimated_fuel_usage_gallons": 83.15,
     "id": "40000000-0000-4000-8000-000000000005",
     "status": "scheduled",
     "actual_departure": null,
     "actual_arrival": null,
-    "created_at": "2026-07-18T18:45:00+00:00",
-    "updated_at": "2026-07-20T21:34:00+00:00"
+    "sub_status": null,
+    "created_at": "2026-07-18T18:45:00Z",
+    "updated_at": "2026-07-20T21:34:00Z"
   },
   {
     "trip_id": "30000000-0000-4000-8000-000000000003",
@@ -116,12 +141,17 @@
     "scheduled_arrival": "2026-07-22T17:40:00-04:00",
     "passengers": 5,
     "notes": "Ground transport confirmed.",
+    "distance_nm": 214.33,
+    "estimated_flight_time_minutes": 27.72,
+    "estimated_leg_time_minutes": 57.72,
+    "estimated_fuel_usage_gallons": 83.15,
     "id": "40000000-0000-4000-8000-000000000006",
     "status": "scheduled",
     "actual_departure": null,
     "actual_arrival": null,
-    "created_at": "2026-07-18T18:45:00+00:00",
-    "updated_at": "2026-07-20T21:34:00+00:00"
+    "sub_status": null,
+    "created_at": "2026-07-18T18:45:00Z",
+    "updated_at": "2026-07-20T21:34:00Z"
   },
   {
     "trip_id": "30000000-0000-4000-8000-000000000004",
@@ -137,12 +167,17 @@
     "scheduled_arrival": "2026-07-23T09:05:00-06:00",
     "passengers": 8,
     "notes": "Load equipment first.",
+    "distance_nm": 1394.78,
+    "estimated_flight_time_minutes": 173.62,
+    "estimated_leg_time_minutes": 203.62,
+    "estimated_fuel_usage_gallons": 810.25,
     "id": "40000000-0000-4000-8000-000000000007",
     "status": "scheduled",
     "actual_departure": null,
     "actual_arrival": null,
-    "created_at": "2026-07-18T18:45:00+00:00",
-    "updated_at": "2026-07-20T21:34:00+00:00"
+    "sub_status": null,
+    "created_at": "2026-07-18T18:45:00Z",
+    "updated_at": "2026-07-20T21:34:00Z"
   },
   {
     "trip_id": "30000000-0000-4000-8000-000000000004",
@@ -158,12 +193,17 @@
     "scheduled_arrival": "2026-07-25T17:20:00-04:00",
     "passengers": 8,
     "notes": "Crew report 12:30 local.",
+    "distance_nm": 1394.78,
+    "estimated_flight_time_minutes": 173.62,
+    "estimated_leg_time_minutes": 203.62,
+    "estimated_fuel_usage_gallons": 810.25,
     "id": "40000000-0000-4000-8000-000000000008",
     "status": "scheduled",
     "actual_departure": null,
     "actual_arrival": null,
-    "created_at": "2026-07-18T18:45:00+00:00",
-    "updated_at": "2026-07-20T21:34:00+00:00"
+    "sub_status": null,
+    "created_at": "2026-07-18T18:45:00Z",
+    "updated_at": "2026-07-20T21:34:00Z"
   },
   {
     "trip_id": "30000000-0000-4000-8000-000000000005",
@@ -178,12 +218,17 @@
     "scheduled_arrival": "2026-07-27T11:15:00-04:00",
     "passengers": 4,
     "notes": "Camera cases pre-cleared.",
+    "distance_nm": 251.63,
+    "estimated_flight_time_minutes": 34.31,
+    "estimated_leg_time_minutes": 64.31,
+    "estimated_fuel_usage_gallons": 114.38,
     "id": "40000000-0000-4000-8000-000000000009",
     "status": "scheduled",
     "actual_departure": null,
     "actual_arrival": null,
-    "created_at": "2026-07-18T18:45:00+00:00",
-    "updated_at": "2026-07-20T21:34:00+00:00"
+    "sub_status": null,
+    "created_at": "2026-07-18T18:45:00Z",
+    "updated_at": "2026-07-20T21:34:00Z"
   },
   {
     "trip_id": "30000000-0000-4000-8000-000000000005",
@@ -198,11 +243,16 @@
     "scheduled_arrival": "2026-07-27T17:15:00-04:00",
     "passengers": 4,
     "notes": "Vehicles requested planeside.",
+    "distance_nm": 251.63,
+    "estimated_flight_time_minutes": 34.31,
+    "estimated_leg_time_minutes": 64.31,
+    "estimated_fuel_usage_gallons": 114.38,
     "id": "40000000-0000-4000-8000-000000000010",
     "status": "scheduled",
     "actual_departure": null,
     "actual_arrival": null,
-    "created_at": "2026-07-18T18:45:00+00:00",
-    "updated_at": "2026-07-20T21:34:00+00:00"
+    "sub_status": null,
+    "created_at": "2026-07-18T18:45:00Z",
+    "updated_at": "2026-07-20T21:34:00Z"
   }
 ]

@@ -201,3 +201,10 @@ def test_flight_scheduling_survives_missing_estimate_inputs(tmp_path: Path) -> N
     assert response.json()["distance_nm"] is None
     assert response.json()["estimated_flight_time_minutes"] is None
     assert response.json()["estimated_fuel_usage_gallons"] is None
+
+    write_airports(tmp_path / "airports.csv")
+    restarted = TestClient(create_app(tmp_path))
+    backfilled = restarted.get(f"/api/v1/flights/{response.json()['id']}").json()
+    assert 900 < backfilled["distance_nm"] < 905
+    assert backfilled["estimated_flight_time_minutes"] is None
+    assert backfilled["estimated_fuel_usage_gallons"] is None

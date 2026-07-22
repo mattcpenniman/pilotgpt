@@ -438,6 +438,23 @@ class SchedulingService:
         self.store.create("flights", created.model_dump(mode="json"))
         return created
 
+    def backfill_flight_estimates(self) -> None:
+        if not self.airports or not self.airports.path.is_file():
+            return
+        estimate_fields = (
+            "distance_nm",
+            "estimated_flight_time_minutes",
+            "estimated_leg_time_minutes",
+            "estimated_fuel_usage_gallons",
+        )
+        for record in self.store.all("flights"):
+            if all(record.get(field) is not None for field in estimate_fields):
+                continue
+            updated = self._flight_with_estimates(record)
+            if updated.distance_nm is None:
+                continue
+            self.store.replace("flights", updated.id, updated.model_dump(mode="json"))
+
     def update_flight(self, flight_id: str, payload: BaseModel) -> Flight:
         existing = self.get("flights", flight_id, Flight)
         if existing.status != FlightStatus.SCHEDULED:
