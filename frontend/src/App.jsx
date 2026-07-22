@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, ArrowDownRight, ArrowRight, Bell, CalendarDays, Check, ChevronDown,
-  ChevronRight, CircleDollarSign, Clock3, Fuel, Gauge, LayoutDashboard, Menu,
+  Activity, ArrowDownRight, ArrowRight, Bell, CalendarDays, ChartNoAxesGantt, Check,
+  ChevronDown, ChevronRight, CircleDollarSign, Clock3, Fuel, Gauge, LayoutDashboard, Menu,
   MoreHorizontal, Plane, PlaneLanding, PlaneTakeoff, Plus, RefreshCw, Search,
   Settings, ShieldCheck, Sparkles, Users, X, Wrench,
 } from 'lucide-react';
@@ -11,6 +11,7 @@ import { demoData } from './demoData';
 const NAV = [
   { id:'dashboard', label:'Overview', icon:LayoutDashboard },
   { id:'schedule', label:'Flight schedule', icon:CalendarDays },
+  { id:'timeline', label:'Trip timeline', icon:ChartNoAxesGantt },
   { id:'unscheduled', label:'Needs scheduling', icon:Clock3 },
   { id:'trips', label:'Trip requests', icon:PlaneTakeoff },
   { id:'fleet', label:'Fleet', icon:Plane },
@@ -143,6 +144,59 @@ function TripsPage({ data, onApprove, onReject, onCreate }) {
   return <main className="content inner-page"><PageHeading eyebrow="Customer travel" title="Trip requests" copy="Review requested travel and coordinate approved trips." action={onCreate} actionLabel="New request"/><div className="filter-bar"><div>{['all','requested','approved','rejected','cancelled'].map(x=><button key={x} className={filter===x?'active':''} onClick={()=>setFilter(x)}>{title(x)}<span>{data.trips.filter(t=>x==='all'||t.status===x).length}</span></button>)}</div></div><div className="trip-grid">{trips.map(t=><article className="trip-card" key={t.id}><div className="trip-card-top"><Badge status={t.status}/><button><MoreHorizontal size={18}/></button></div><div className="big-route"><div><strong>{t.origin}</strong><small>{timeFmt(t.departure_at)}</small></div><span><i/><Plane size={18}/><i/></span><div><strong>{t.destination}</strong><small>{dateFmt(t.departure_at)}</small></div></div><h3>{t.customer_name}</h3><p>{t.purpose || 'Private charter'}</p><div className="trip-meta"><span><Users size={15}/>{t.passengers} passengers</span><span><CalendarDays size={15}/>{dateFmt(t.return_at) || 'One way'}</span></div>{t.status==='requested'?<div className="request-actions"><button onClick={()=>onReject(t)}>Decline</button><button className="dark" onClick={()=>onApprove(t)}>Review <ArrowRight size={15}/></button></div>:<div className="assignment"><span><Plane size={15}/>{data.aircraft.find(a=>a.id===t.aircraft_id)?.tail_number || 'No aircraft assigned'}</span><span><Users size={15}/>{t.pilot_ids?.length || 0} pilots</span></div>}</article>)}</div>{!trips.length&&<Empty title="No trip requests here" copy="New customer requests will be collected in this workspace." action={onCreate} actionLabel="New request"/>}</main>;
 }
 
+const TIMELINE_STAGES = [
+  { id:'requested', label:'Requested', copy:'Awaiting review' },
+  { id:'approved', label:'Approved', copy:'Scheduling' },
+  { id:'trip_pending', label:'Trip pending', copy:'Action required' },
+  { id:'in_progress', label:'In progress', copy:'Active flight' },
+  { id:'complete', label:'Complete', copy:'Trip closed' },
+];
+
+function getTripTimelineState(trip, flights) {
+  const linked = flights.filter(f=>f.trip_id===trip.id&&f.status!=='cancelled');
+  const raw = `${trip.sub_status||trip.workflow_status||trip.status||''}`.toLowerCase().replaceAll('-','_').replaceAll(' ','_');
+  const flightPendingReschedule = linked.some(f=>`${f.sub_status||f.status||''}`.toLowerCase().replaceAll('-','_').includes('pending_resched'));
+  const hasDeparted = linked.some(f=>['departed','in_progress'].includes(f.status)||f.actual_departure);
+
+  if (['complete','completed'].includes(raw)||linked.length&&linked.every(f=>f.status==='completed')) return { stage:'complete', detail:'Completed', tone:'complete' };
+  if (flightPendingReschedule||(raw.includes('pending_resched')&&(hasDeparted||raw.includes('flight')))) return { stage:'in_progress', detail:'Flight pending reschedule', tone:'attention' };
+  if (hasDeparted) return { stage:'in_progress', detail:'Flight in progress', tone:'active' };
+  if (raw.includes('pending_cancel')) return { stage:'trip_pending', detail:'Pending cancellation', tone:'attention' };
+  if (raw.includes('pending_resched')) return { stage:'trip_pending', detail:'Pending reschedule', tone:'attention' };
+  if (['cancelled','canceled'].includes(raw)) return { stage:'trip_pending', detail:'Cancelled', tone:'muted' };
+  if (linked.some(f=>f.status==='scheduled')) return { stage:'approved', detail:'Scheduled', tone:'scheduled' };
+  if (raw==='approved') return { stage:'approved', detail:'Pending scheduling', tone:'pending' };
+  if (raw==='rejected') return { stage:'requested', detail:'Declined', tone:'muted' };
+  return { stage:'requested', detail:'Awaiting approval', tone:'pending' };
+}
+
+function TripTimelinePage({ data }) {
+  const [filter,setFilter]=useState('all');
+  const rows=data.trips.map(trip=>({...trip,timeline:getTripTimelineState(trip,data.flights)})).sort((a,b)=>new Date(a.departure_at)-new Date(b.departure_at));
+  const filtered=rows.filter(trip=>filter==='all'||(filter==='attention'?trip.timeline.tone==='attention':trip.timeline.stage===filter));
+  const stageCount=stage=>rows.filter(trip=>trip.timeline.stage===stage).length;
+  return <main className="content inner-page timeline-page">
+    <PageHeading eyebrow="Trip operations" title="Trip timeline" copy="Follow every trip from request through completion, ordered by departure date."/>
+    <section className="timeline-summary">
+      <div><span>All trips</span><strong>{rows.length}</strong><small>Sorted chronologically</small></div>
+      <div><span>Needs attention</span><strong>{rows.filter(t=>t.timeline.tone==='attention').length}</strong><small>Reschedule or cancellation</small></div>
+      <div><span>In progress</span><strong>{stageCount('in_progress')}</strong><small>Active trip legs</small></div>
+      <div><span>Completed</span><strong>{stageCount('complete')}</strong><small>Closed trips</small></div>
+    </section>
+    <div className="filter-bar timeline-filters"><div>{[['all','All trips'],['attention','Needs attention'],['in_progress','In progress'],['complete','Complete']].map(([id,label])=><button key={id} className={filter===id?'active':''} onClick={()=>setFilter(id)}>{label}<span>{id==='all'?rows.length:id==='attention'?rows.filter(t=>t.timeline.tone==='attention').length:stageCount(id)}</span></button>)}</div><span><CalendarDays size={14}/> Sorted by trip date</span></div>
+    <section className="panel timeline-panel">
+      <div className="timeline-scroll">
+        <div className="timeline-header"><div className="timeline-trip-heading"><span>Trip</span><small>Departure date</small></div>{TIMELINE_STAGES.map((stage,index)=><div key={stage.id} className="timeline-stage-heading"><i>{index+1}</i><span>{stage.label}<small>{stage.copy}</small></span></div>)}</div>
+        {filtered.map(trip=>{const activeIndex=TIMELINE_STAGES.findIndex(stage=>stage.id===trip.timeline.stage);const linked=data.flights.filter(f=>f.trip_id===trip.id&&f.status!=='cancelled');return <div className="timeline-row" key={trip.id}>
+          <div className="timeline-trip"><div className="timeline-date"><strong>{dateFmt(trip.departure_at,{day:'2-digit'})}</strong><span>{new Intl.DateTimeFormat('en-US',{month:'short',year:'numeric'}).format(new Date(trip.departure_at))}</span></div><div><b>{trip.customer_name}</b><span className="timeline-route"><code>{trip.origin}</code><ArrowRight size={12}/><code>{trip.destination}</code></span><small>{timeFmt(trip.departure_at)} · {trip.passengers} pax</small></div></div>
+          {TIMELINE_STAGES.map((stage,index)=><div key={stage.id} className={`timeline-cell ${index<activeIndex?'passed':''} ${index===activeIndex?'current':''}`}><div className="timeline-stage-row"><span className="timeline-track"><i>{index<activeIndex?<Check size={11}/>:null}</i></span></div><div className="timeline-substatus-row">{index===activeIndex&&<div className={`timeline-status ${trip.timeline.tone}`}><span>{trip.timeline.detail}</span>{linked.length>0&&<small>{linked.length} flight {linked.length===1?'leg':'legs'}</small>}</div>}</div></div>)}
+        </div>})}
+        {!filtered.length&&<Empty icon={ChartNoAxesGantt} title="No trips in this view" copy="Choose another filter to see the rest of the trip timeline."/>}
+      </div>
+    </section>
+  </main>;
+}
+
 function UnscheduledPage({ data, onSchedule }) {
   const trips=data.trips.filter(t=>t.status==='approved'&&!data.flights.some(f=>f.trip_id===t.id&&f.status!=='cancelled')).sort((a,b)=>new Date(a.departure_at)-new Date(b.departure_at));
   return <main className="content inner-page"><PageHeading eyebrow="Dispatch queue" title="Approved trips to schedule" copy="Build flight legs for approved travel that has not reached the operations schedule."/><div className="queue-summary"><div><span><Clock3 size={18}/></span><p>Awaiting scheduling<strong>{trips.length}</strong></p></div><div><span><CalendarDays size={18}/></span><p>Next requested departure<strong>{trips.length?dateFmt(trips[0].departure_at,{weekday:'short'}):'All clear'}</strong></p></div><div><span><Users size={18}/></span><p>Travelers waiting<strong>{trips.reduce((sum,t)=>sum+t.passengers,0)}</strong></p></div></div>{trips.length?<section className="panel unscheduled-table"><div className="unscheduled-head"><span>Customer</span><span>Route</span><span>Requested departure</span><span>Passengers</span><span>Aircraft & crew</span><span></span></div>{trips.map(trip=>{const aircraft=data.aircraft.find(a=>a.id===trip.aircraft_id);const pilots=data.pilots.filter(p=>trip.pilot_ids?.includes(p.id));return <div className="unscheduled-row" key={trip.id}><div className="unscheduled-customer"><span className="customer-avatar">{trip.customer_name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><span><b>{trip.customer_name}</b><small>{trip.purpose||'Private charter'}</small></span></div><div className="compact-route"><b>{trip.origin}</b><ArrowRight size={13}/><b>{trip.destination}</b></div><div className="date-cell"><b>{dateFmt(trip.departure_at,{weekday:'short',year:'numeric'})}</b><small>{timeFmt(trip.departure_at)}</small></div><span className="passenger-cell"><Users size={14}/>{trip.passengers}</span><div className="assigned-cell"><span><Plane size={14}/>{aircraft?`${aircraft.tail_number} · ${aircraft.model}`:'Aircraft not assigned'}</span><span><Users size={14}/>{pilots.length?pilots.map(p=>`${p.first_name} ${p.last_name}`).join(', '):'Crew not assigned'}</span></div><button className="schedule-button" disabled={!trip.aircraft_id||!trip.pilot_ids?.length} onClick={()=>onSchedule(trip)}>Schedule leg <ArrowRight size={14}/></button></div>})}</section>:<section className="panel"><Empty icon={Check} title="Every approved trip is scheduled" copy="Newly approved trips will appear here until their first flight leg is created."/></section>}</main>;
@@ -209,5 +263,5 @@ export default function App() {
   const status=async(flight,next)=>{if(demo){setData(d=>({...d,flights:d.flights.map(f=>f.id===flight.id?{...f,status:next}:f)}));notify(`Flight marked ${next}.`);return;}try{await api.flightStatus(flight.id,next);notify(`Flight marked ${next}.`);load(false)}catch(e){notify(e.message,'error')}};
   const openCreate=(type='trip')=>setModal({type});
   const setDemoMode=value=>{if(value){setData(demoData);setDemo(true)}else load()};
-  return <div className="app-shell"><Sidebar current={view} setCurrent={setView} open={sidebarOpen} close={()=>setSidebarOpen(false)} data={data}/><div className="app-main"><Header current={view} query={query} setQuery={setQuery} onCreate={()=>openCreate("trip")} demo={demo} setDemo={setDemoMode} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}/>{loading?<div className="loader"><span/><p>Preparing your operation…</p></div>:<>{error&&demo&&<div className="connection-note"><Activity size={15}/> Live API unavailable — showing a fully interactive demo workspace.<button onClick={()=>load()}><RefreshCw size={14}/> Retry</button></div>}{view==="dashboard"&&<Overview data={displayed} setView={setView} onApprove={trip=>setModal({type:"approve",trip})} onReject={reject} onCreate={()=>openCreate("trip")} onStatus={status} useDemo={demo}/>} {view==="schedule"&&<SchedulePage data={displayed} onStatus={status} onCreate={()=>openCreate("trip")}/>} {view==="unscheduled"&&<UnscheduledPage data={displayed} onSchedule={trip=>setModal({type:"schedule-trip",trip})}/>} {view==="trips"&&<TripsPage data={displayed} onApprove={trip=>setModal({type:"approve",trip})} onReject={reject} onCreate={()=>openCreate("trip")}/>} {view==="fleet"&&<FleetPage data={displayed} onCreate={openCreate}/>} {view==="pilots"&&<PilotsPage data={displayed} onCreate={openCreate}/>} {view==="fuel"&&<FuelPage data={displayed} onCreate={openCreate}/>}</>}</div>{sidebarOpen&&<div className="sidebar-scrim" onClick={()=>setSidebarOpen(false)}/>} {modal?.type==="approve"?<ApproveModal trip={modal.trip} data={data} onClose={()=>setModal(null)} onSubmit={approve}/>:modal?.type==="schedule-trip"?<ScheduleTripModal trip={modal.trip} data={data} onClose={()=>setModal(null)} onSubmit={create}/>:modal&&<CreateModal type={modal.type} data={data} onClose={()=>setModal(null)} onSubmit={create}/>}<Toast toast={toast} onClose={()=>setToast(null)}/></div>;
+  return <div className="app-shell"><Sidebar current={view} setCurrent={setView} open={sidebarOpen} close={()=>setSidebarOpen(false)} data={data}/><div className="app-main"><Header current={view} query={query} setQuery={setQuery} onCreate={()=>openCreate("trip")} demo={demo} setDemo={setDemoMode} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}/>{loading?<div className="loader"><span/><p>Preparing your operation…</p></div>:<>{error&&demo&&<div className="connection-note"><Activity size={15}/> Live API unavailable — showing a fully interactive demo workspace.<button onClick={()=>load()}><RefreshCw size={14}/> Retry</button></div>}{view==="dashboard"&&<Overview data={displayed} setView={setView} onApprove={trip=>setModal({type:"approve",trip})} onReject={reject} onCreate={()=>openCreate("trip")} onStatus={status} useDemo={demo}/>} {view==="schedule"&&<SchedulePage data={displayed} onStatus={status} onCreate={()=>openCreate("trip")}/>} {view==="timeline"&&<TripTimelinePage data={displayed}/>} {view==="unscheduled"&&<UnscheduledPage data={displayed} onSchedule={trip=>setModal({type:"schedule-trip",trip})}/>} {view==="trips"&&<TripsPage data={displayed} onApprove={trip=>setModal({type:"approve",trip})} onReject={reject} onCreate={()=>openCreate("trip")}/>} {view==="fleet"&&<FleetPage data={displayed} onCreate={openCreate}/>} {view==="pilots"&&<PilotsPage data={displayed} onCreate={openCreate}/>} {view==="fuel"&&<FuelPage data={displayed} onCreate={openCreate}/>}</>}</div>{sidebarOpen&&<div className="sidebar-scrim" onClick={()=>setSidebarOpen(false)}/>} {modal?.type==="approve"?<ApproveModal trip={modal.trip} data={data} onClose={()=>setModal(null)} onSubmit={approve}/>:modal?.type==="schedule-trip"?<ScheduleTripModal trip={modal.trip} data={data} onClose={()=>setModal(null)} onSubmit={create}/>:modal&&<CreateModal type={modal.type} data={data} onClose={()=>setModal(null)} onSubmit={create}/>}<Toast toast={toast} onClose={()=>setToast(null)}/></div>;
 }
