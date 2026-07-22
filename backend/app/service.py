@@ -17,7 +17,10 @@ from .models import (
     FlightRescheduleRequestCreate,
     FlightStatus,
     FuelLog,
+    FuelLogCreate,
     Pilot,
+    PilotFlight,
+    PilotFlightStatus,
     RescheduleChange,
     RescheduleEvent,
     RescheduleRequest,
@@ -99,14 +102,22 @@ class SchedulingService:
                 status_code=409,
                 detail="Approved trip itinerary changes require a reschedule request",
             )
-        if payload.sub_status == WorkflowSubStatus.PENDING_RESCHEDULE:
-            raise HTTPException(status_code=422, detail="pending_reschedule is managed by reschedule requests")
+        managed_statuses = {
+            WorkflowSubStatus.PENDING_RESCHEDULE,
+            WorkflowSubStatus.RESCHEDULE_CONFIRMED,
+            WorkflowSubStatus.CANCELLATION_CONFIRMED,
+        }
+        if payload.sub_status in managed_statuses:
+            raise HTTPException(status_code=422, detail=f"{payload.sub_status} is managed by workflow actions")
         try:
             candidate = Trip.model_validate(trip.model_dump() | payload.model_dump(exclude_unset=True))
         except ValidationError as exc:
             raise HTTPException(status_code=422, detail=exc.errors()[0]["msg"]) from exc
         self.validate_trip(candidate)
-        return self.update("trips", trip_id, payload, Trip)
+        updated = self.update("trips", trip_id, payload, Trip)
+        if "sub_status" in fields:
+            self._cascade_trip_workflow(updated.id, updated.sub_status)
+        return updated
 
     @staticmethod
     def overlaps(start_a: datetime, end_a: datetime, start_b: datetime, end_b: datetime) -> bool:
@@ -179,12 +190,93 @@ class SchedulingService:
             raise HTTPException(status_code=409, detail="Rejected trips cannot be cancelled")
         record = trip.model_dump(mode="json") | {
             "status": TripStatus.CANCELLED,
-            "sub_status": None,
+            "sub_status": WorkflowSubStatus.CANCELLATION_CONFIRMED,
             "updated_at": utc_now().isoformat(),
         }
         cancelled = Trip.model_validate(record)
         self.store.replace("trips", trip_id, cancelled.model_dump(mode="json"))
+        self._cascade_trip_workflow(trip_id, WorkflowSubStatus.CANCELLATION_CONFIRMED)
         return cancelled
+
+    @staticmethod
+    def _pilot_flight_status(flight: Flight) -> PilotFlightStatus:
+        if flight.status == FlightStatus.CANCELLED or flight.sub_status == WorkflowSubStatus.CANCELLATION_CONFIRMED:
+            return PilotFlightStatus.CANCELLATION_CONFIRMED
+        mapping = {
+            WorkflowSubStatus.PENDING_CANCELLATION: PilotFlightStatus.PENDING_CANCELLATION,
+            WorkflowSubStatus.PENDING_RESCHEDULE: PilotFlightStatus.PENDING_RESCHEDULE,
+            WorkflowSubStatus.NEEDS_RESCHEDULING: PilotFlightStatus.PENDING_RESCHEDULE,
+            WorkflowSubStatus.RESCHEDULE_CONFIRMED: PilotFlightStatus.RESCHEDULE_CONFIRMED,
+        }
+        if flight.sub_status is None:
+            return PilotFlightStatus.ASSIGNED
+        return mapping.get(flight.sub_status, PilotFlightStatus.ASSIGNED)
+
+    def _sync_pilot_flights(self, flight: Flight) -> None:
+        existing = {
+            item.pilot_id: item
+            for item in self.list("pilot_flights", PilotFlight)
+            if item.flight_id == flight.id
+        }
+        inherited_status = self._pilot_flight_status(flight)
+        now = utc_now()
+        for pilot_id in flight.pilot_ids:
+            assignment = existing.pop(pilot_id, None)
+            if assignment:
+                if assignment.status != inherited_status:
+                    updated = assignment.model_copy(update={"status": inherited_status, "updated_at": now})
+                    self.store.replace("pilot_flights", assignment.id, updated.model_dump(mode="json"))
+                continue
+            created = PilotFlight(
+                id=str(uuid4()),
+                pilot_id=pilot_id,
+                flight_id=flight.id,
+                status=inherited_status,
+                created_at=now,
+                updated_at=now,
+            )
+            self.store.create("pilot_flights", created.model_dump(mode="json"))
+        for assignment in existing.values():
+            self.store.delete("pilot_flights", assignment.id)
+
+    def _save_flight(self, flight: Flight) -> Flight:
+        self.store.replace("flights", flight.id, flight.model_dump(mode="json"))
+        self._sync_pilot_flights(flight)
+        return flight
+
+    def backfill_pilot_flights(self) -> None:
+        for trip in self.list("trips", Trip):
+            workflow = trip.sub_status
+            if trip.status == TripStatus.CANCELLED and workflow is None:
+                workflow = WorkflowSubStatus.CANCELLATION_CONFIRMED
+                updated = trip.model_copy(update={"sub_status": workflow, "updated_at": utc_now()})
+                self.store.replace("trips", trip.id, updated.model_dump(mode="json"))
+            if workflow is not None:
+                self._cascade_trip_workflow(trip.id, workflow)
+        for flight in self.list("flights", Flight):
+            self._sync_pilot_flights(flight)
+
+    def delete_flight(self, flight_id: str) -> None:
+        self.get("flights", flight_id, Flight)
+        for assignment in self.list("pilot_flights", PilotFlight):
+            if assignment.flight_id == flight_id:
+                self.store.delete("pilot_flights", assignment.id)
+        self.store.delete("flights", flight_id)
+
+    def _cascade_trip_workflow(self, trip_id: str, workflow: WorkflowSubStatus | None) -> None:
+        for flight in self.list("flights", Flight):
+            if flight.trip_id != trip_id or flight.status != FlightStatus.SCHEDULED:
+                continue
+            status = FlightStatus.CANCELLED if workflow == WorkflowSubStatus.CANCELLATION_CONFIRMED else flight.status
+            if flight.status == status and flight.sub_status == workflow:
+                self._sync_pilot_flights(flight)
+                continue
+            updated = flight.model_copy(update={
+                "status": status,
+                "sub_status": workflow,
+                "updated_at": utc_now(),
+            })
+            self._save_flight(updated)
 
     def _validate_approved_trip_reschedule(self, trip: Trip) -> None:
         if not trip.aircraft_id or not trip.pilot_ids:
@@ -272,6 +364,10 @@ class SchedulingService:
         }
         self.store.create("reschedule_requests", request.model_dump(mode="json"))
         self.store.replace(collection, target_id, target_record)
+        if target_type == RescheduleTarget.TRIP:
+            self._cascade_trip_workflow(target_id, WorkflowSubStatus.PENDING_RESCHEDULE)
+        else:
+            self._sync_pilot_flights(Flight.model_validate(target_record))
         return request
 
     def request_trip_reschedule(self, trip_id: str, payload: TripRescheduleRequestCreate) -> RescheduleRequest:
@@ -334,7 +430,7 @@ class SchedulingService:
                     if target_record.get(field) != after:
                         event_changes.append(RescheduleChange(field=field, before=target_record.get(field), after=after))
             updated_target = candidate.model_dump(mode="json") | {
-                "sub_status": None,
+                "sub_status": WorkflowSubStatus.RESCHEDULE_CONFIRMED,
                 "updated_at": now.isoformat(),
             }
         else:
@@ -356,6 +452,11 @@ class SchedulingService:
         })
         self.store.replace(collection, target_id, updated_target)
         self.store.replace("reschedule_requests", request.id, resolved.model_dump(mode="json"))
+        workflow = WorkflowSubStatus.RESCHEDULE_CONFIRMED if resolution.status == RescheduleStatus.APPROVED else None
+        if request.target_type == RescheduleTarget.TRIP:
+            self._cascade_trip_workflow(target_id, workflow)
+        else:
+            self._sync_pilot_flights(Flight.model_validate(updated_target))
         return resolved
 
     def validate_flight(self, flight: FlightCreate | Flight, exclude_id: str | None = None) -> None:
@@ -429,13 +530,18 @@ class SchedulingService:
         self.ensure_unique("flights", "flight_number", payload.flight_number)
         self.validate_flight(payload)
         now = utc_now()
+        inherited_status = None
+        if payload.trip_id:
+            inherited_status = self.get("trips", payload.trip_id, Trip).sub_status
         record = payload.model_dump(mode="json") | {
             "id": str(uuid4()),
+            "sub_status": inherited_status,
             "created_at": now.isoformat(),
             "updated_at": now.isoformat(),
         }
         created = self._flight_with_estimates(record)
         self.store.create("flights", created.model_dump(mode="json"))
+        self._sync_pilot_flights(created)
         return created
 
     def backfill_flight_estimates(self) -> None:
@@ -463,10 +569,11 @@ class SchedulingService:
         if flight_number is not None:
             self.ensure_unique("flights", "flight_number", flight_number, flight_id)
         record = existing.model_dump(mode="json") | payload.model_dump(mode="json", exclude_unset=True)
+        if getattr(payload, "sub_status", None) == WorkflowSubStatus.CANCELLATION_CONFIRMED:
+            record["status"] = FlightStatus.CANCELLED
         updated = self._flight_with_estimates(record | {"updated_at": utc_now().isoformat()})
         self.validate_flight(updated, exclude_id=flight_id)
-        self.store.replace("flights", flight_id, updated.model_dump(mode="json"))
-        return updated
+        return self._save_flight(updated)
 
     def change_flight_status(self, flight_id: str, new_status: FlightStatus, occurred_at: datetime | None) -> Flight:
         flight = self.get("flights", flight_id, Flight)
@@ -480,6 +587,12 @@ class SchedulingService:
         }
         if new_status == flight.status:
             return flight
+        if new_status == FlightStatus.DEPARTED and flight.sub_status in {
+            WorkflowSubStatus.PENDING_CANCELLATION,
+            WorkflowSubStatus.PENDING_RESCHEDULE,
+            WorkflowSubStatus.NEEDS_RESCHEDULING,
+        }:
+            raise HTTPException(status_code=409, detail="Resolve the pending flight workflow before departure")
         if new_status not in allowed[flight.status]:
             raise HTTPException(status_code=409, detail=f"Cannot change flight from {flight.status} to {new_status}")
         now = occurred_at or utc_now()
@@ -488,12 +601,13 @@ class SchedulingService:
             changes["actual_departure"] = now.isoformat()
         elif new_status == FlightStatus.COMPLETED:
             changes["actual_arrival"] = now.isoformat()
+        elif new_status == FlightStatus.CANCELLED:
+            changes["sub_status"] = WorkflowSubStatus.CANCELLATION_CONFIRMED
         record = flight.model_dump(mode="json") | changes
         updated = Flight.model_validate(record)
-        self.store.replace("flights", flight_id, updated.model_dump(mode="json", exclude={"total_cost"}))
-        return updated
+        return self._save_flight(updated)
 
-    def validate_fuel_log(self, fuel_log: BaseModel) -> None:
+    def validate_fuel_log(self, fuel_log: FuelLogCreate | FuelLog) -> None:
         if fuel_log.fueled_at.tzinfo is None:
             raise HTTPException(status_code=422, detail="fueled_at must include a timezone offset")
         self.get("aircraft", fuel_log.aircraft_id, Aircraft)

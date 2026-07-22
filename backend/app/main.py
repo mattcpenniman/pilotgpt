@@ -11,7 +11,7 @@ from .models import (
     Aircraft, AircraftCreate, AircraftStatus, AircraftUpdate, Airport, AirportDistance, Dashboard,
     Flight, FlightCreate, FlightStatus, FlightStatusUpdate, FlightUpdate,
     FlightRescheduleRequestCreate, FuelLog, FuelLogCreate, FuelLogUpdate,
-    Pilot, PilotCreate, PilotUpdate, RescheduleRequest, RescheduleResolution,
+    Pilot, PilotCreate, PilotFlight, PilotFlightStatus, PilotUpdate, RescheduleRequest, RescheduleResolution,
     RescheduleStatus, RescheduleTarget, Trip, TripApproval, TripCreate,
     TripRejection, TripRescheduleRequestCreate, TripStatus, TripUpdate,
 )
@@ -26,6 +26,7 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     airports = AirportCatalog(resolved_data_dir / "airports.csv")
     service = SchedulingService(JsonStore(resolved_data_dir), airports)
     service.backfill_flight_estimates()
+    service.backfill_pilot_flights()
     app = FastAPI(
         title="PilotGPT Jet Scheduling API",
         version="1.0.0",
@@ -223,8 +224,26 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
 
     @router.delete("/flights/{flight_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["flights"])
     def delete_flight(flight_id: str) -> Response:
-        service.delete("flights", flight_id, Flight)
+        service.delete_flight(flight_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.get("/pilot-flights", response_model=list[PilotFlight], tags=["pilot-flights"])
+    def list_pilot_flights(
+        flight_id: str | None = None,
+        pilot_id: str | None = None,
+        assignment_status: PilotFlightStatus | None = Query(default=None, alias="status"),
+    ) -> list[PilotFlight]:
+        records = service.list("pilot_flights", PilotFlight)
+        return [
+            item for item in records
+            if (flight_id is None or item.flight_id == flight_id)
+            and (pilot_id is None or item.pilot_id == pilot_id)
+            and (assignment_status is None or item.status == assignment_status)
+        ]
+
+    @router.get("/pilot-flights/{pilot_flight_id}", response_model=PilotFlight, tags=["pilot-flights"])
+    def get_pilot_flight(pilot_flight_id: str) -> PilotFlight:
+        return service.get("pilot_flights", pilot_flight_id, PilotFlight)
 
     @router.get("/fuel-logs", response_model=list[FuelLog], tags=["fuel"])
     def list_fuel_logs(aircraft_id: str | None = None, flight_id: str | None = None) -> list[FuelLog]:

@@ -51,3 +51,21 @@ export const demoData = {
     { id:'l3', aircraft_id:'a4', flight_id:'f3', airport:'KMMU', fueled_at:at(-2,11), gallons:284.6, price_per_gallon:6.18, vendor:'Signature', total_cost:1759.03 },
   ],
 };
+
+for (const flight of demoData.flights) {
+  const trip = demoData.trips.find((item) => item.id === flight.trip_id);
+  if (flight.status === 'scheduled' && !flight.sub_status && trip?.sub_status) {
+    flight.sub_status = trip.sub_status;
+  }
+}
+
+demoData.pilotFlights = demoData.flights.flatMap((flight) => flight.pilot_ids.map((pilotId) => ({
+  id:`pf-${flight.id}-${pilotId}`,
+  flight_id:flight.id,
+  pilot_id:pilotId,
+  status:flight.status === 'cancelled'
+    ? 'cancellation_confirmed'
+    : flight.sub_status === 'needs_rescheduling' ? 'pending_reschedule' : flight.sub_status || 'assigned',
+  created_at:flight.created_at || flight.scheduled_departure,
+  updated_at:flight.updated_at || flight.scheduled_departure,
+})));

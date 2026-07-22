@@ -10,6 +10,58 @@ def build_client(data_dir: Path) -> TestClient:
     return TestClient(create_app(data_dir))
 
 
+def create_scheduled_flight(client: TestClient) -> tuple[dict, dict, dict]:
+    pilot = client.post(
+        "/api/v1/pilots",
+        json={
+            "first_name": "Taylor",
+            "last_name": "Reed",
+            "email": "taylor@example.com",
+            "license_number": "ATP-7001",
+            "medical_expires": "2031-01-01",
+        },
+    ).json()
+    aircraft = client.post(
+        "/api/v1/aircraft",
+        json={
+            "tail_number": "N701PG",
+            "make": "Cessna",
+            "model": "Citation Latitude",
+            "passenger_capacity": 9,
+            "home_airport": "KTEB",
+        },
+    ).json()
+    trip = client.post(
+        "/api/v1/trips",
+        json={
+            "customer_name": "Workflow Customer",
+            "origin": "KTEB",
+            "destination": "KBOS",
+            "departure_at": "2030-10-01T09:00:00-04:00",
+            "passengers": 3,
+        },
+    ).json()
+    client.post(
+        f"/api/v1/trips/{trip['id']}/approve",
+        json={"aircraft_id": aircraft["id"], "pilot_ids": [pilot["id"]], "approved_by": "Dispatch"},
+    )
+    flight = client.post(
+        "/api/v1/flights",
+        json={
+            "trip_id": trip["id"],
+            "flight_number": "PG701",
+            "aircraft_id": aircraft["id"],
+            "pilot_ids": [pilot["id"]],
+            "origin": "KTEB",
+            "destination": "KBOS",
+            "scheduled_departure": "2030-10-01T09:00:00-04:00",
+            "scheduled_arrival": "2030-10-01T10:15:00-04:00",
+            "passengers": 3,
+        },
+    ).json()
+    return trip, flight, pilot
+
+
 def test_complete_scheduling_workflow_and_persistence(tmp_path: Path) -> None:
     client = build_client(tmp_path)
 
@@ -275,7 +327,7 @@ def test_reschedule_requests_apply_changes_and_preserve_history(tmp_path: Path) 
     updated_trip = client.get(f"/api/v1/trips/{trip['id']}").json()
     assert updated_trip["departure_at"] == "2030-08-02T11:30:00-04:00"
     assert updated_trip["return_at"] == "2030-08-04T18:00:00-04:00"
-    assert updated_trip["sub_status"] is None
+    assert updated_trip["sub_status"] == "reschedule_confirmed"
     assert client.post(
         f"/api/v1/reschedule-requests/{request['id']}/resolve",
         json={"status": "declined", "resolved_by": "Another dispatcher"},
@@ -475,3 +527,85 @@ def test_approved_trip_allows_substatus_and_more_than_two_flight_legs(tmp_path: 
 
     linked = client.get("/api/v1/flights", params={"trip_id": trip["id"]})
     assert len(linked.json()) == 3
+
+
+def test_flight_workflow_cascades_to_pilot_flights(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    _, flight, pilot = create_scheduled_flight(client)
+
+    assignments = client.get("/api/v1/pilot-flights", params={"flight_id": flight["id"]}).json()
+    assert len(assignments) == 1
+    assert assignments[0]["pilot_id"] == pilot["id"]
+    assert assignments[0]["status"] == "assigned"
+
+    pending = client.patch(
+        f"/api/v1/flights/{flight['id']}",
+        json={"sub_status": "pending_reschedule"},
+    )
+    assert pending.status_code == 200
+    assert pending.json()["sub_status"] == "pending_reschedule"
+    assignment = client.get(f"/api/v1/pilot-flights/{assignments[0]['id']}").json()
+    assert assignment["status"] == "pending_reschedule"
+    blocked_departure = client.post(
+        f"/api/v1/flights/{flight['id']}/status",
+        json={"status": "departed"},
+    )
+    assert blocked_departure.status_code == 409
+
+    confirmed = client.patch(
+        f"/api/v1/flights/{flight['id']}",
+        json={"sub_status": "reschedule_confirmed"},
+    )
+    assert confirmed.status_code == 200
+    assert client.get(f"/api/v1/pilot-flights/{assignments[0]['id']}").json()["status"] == "reschedule_confirmed"
+
+
+def test_trip_cancellation_cascades_and_pilot_flights_backfill(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    trip, flight, _ = create_scheduled_flight(client)
+
+    reschedule = client.post(
+        f"/api/v1/trips/{trip['id']}/reschedule-requests",
+        json={
+            "requested_by": "Dispatch",
+            "reason": "Customer requested a later departure.",
+            "requested_changes": {"departure_at": "2030-10-01T11:00:00-04:00"},
+        },
+    )
+    assert reschedule.status_code == 201
+    assert client.get(f"/api/v1/flights/{flight['id']}").json()["sub_status"] == "pending_reschedule"
+    assert client.get("/api/v1/pilot-flights", params={"flight_id": flight["id"]}).json()[0]["status"] == "pending_reschedule"
+    resolved = client.post(
+        f"/api/v1/reschedule-requests/{reschedule.json()['id']}/resolve",
+        json={"status": "approved", "resolved_by": "Dispatch"},
+    )
+    assert resolved.status_code == 200
+    assert client.get(f"/api/v1/flights/{flight['id']}").json()["sub_status"] == "reschedule_confirmed"
+    assert client.get("/api/v1/pilot-flights", params={"flight_id": flight["id"]}).json()[0]["status"] == "reschedule_confirmed"
+
+    pending = client.patch(
+        f"/api/v1/trips/{trip['id']}",
+        json={"sub_status": "pending_cancellation"},
+    )
+    assert pending.status_code == 200
+    assert client.get(f"/api/v1/flights/{flight['id']}").json()["sub_status"] == "pending_cancellation"
+    assert client.get("/api/v1/pilot-flights", params={"flight_id": flight["id"]}).json()[0]["status"] == "pending_cancellation"
+
+    cancelled = client.post(f"/api/v1/trips/{trip['id']}/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.json()["sub_status"] == "cancellation_confirmed"
+    cascaded_flight = client.get(f"/api/v1/flights/{flight['id']}").json()
+    assert cascaded_flight["status"] == "cancelled"
+    assert cascaded_flight["sub_status"] == "cancellation_confirmed"
+    assert client.get("/api/v1/pilot-flights", params={"flight_id": flight["id"]}).json()[0]["status"] == "cancellation_confirmed"
+
+    persisted_flights = json.loads((tmp_path / "flights.json").read_text())
+    persisted_flights[0]["status"] = "scheduled"
+    persisted_flights[0]["sub_status"] = None
+    (tmp_path / "flights.json").write_text(json.dumps(persisted_flights))
+    (tmp_path / "pilot_flights.json").write_text("[]\n")
+    restarted = build_client(tmp_path)
+    backfilled = restarted.get("/api/v1/pilot-flights", params={"flight_id": flight["id"]}).json()
+    assert len(backfilled) == 1
+    assert backfilled[0]["status"] == "cancellation_confirmed"
+    assert restarted.get(f"/api/v1/flights/{flight['id']}").json()["status"] == "cancelled"

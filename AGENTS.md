@@ -32,6 +32,8 @@ Frontend source lives in `frontend/src/`.
 - `styles.css` contains shared styles; feature-specific styles may use a separate imported CSS file.
 - Use functional React components and hooks consistent with the existing code.
 - Use Lucide icons rather than adding another icon dependency.
+- Fleet and Pilot Cards use a three-dot action to open a populated edit screen; keep these controls functional and preserve this interaction when changing the cards.
+- Resource editors must use the existing `PATCH` API contract and remain usable in the fallback demo workspace.
 - Maintain responsive behavior at the existing desktop, tablet, and mobile breakpoints.
 - Vite environment variables must use the `VITE_` prefix. The API base is configured with `VITE_API_URL`.
 

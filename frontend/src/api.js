@@ -45,6 +45,7 @@ export const api = {
   aircraft: () => request('/aircraft'),
   trips: () => request('/trips'),
   flights: () => request('/flights'),
+  pilotFlights: () => request('/pilot-flights'),
   fuelLogs: () => request('/fuel-logs'),
   airports: (query, limit = 8) => request(`/airports?${new URLSearchParams({ query, limit })}`).catch((error) => error.status ? Promise.reject(error) : searchDemoAirports(query, limit)),
   airport: (code) => request(`/airports/${encodeURIComponent(code)}`).catch((error) => error.status ? Promise.reject(error) : demoAirport(code) || Promise.reject(error)),

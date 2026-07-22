@@ -50,6 +50,16 @@ class WorkflowSubStatus(StrEnum):
     PENDING_RESCHEDULE = "pending_reschedule"
     NEEDS_RESCHEDULING = "needs_rescheduling"
     PENDING_CANCELLATION = "pending_cancellation"
+    CANCELLATION_CONFIRMED = "cancellation_confirmed"
+    RESCHEDULE_CONFIRMED = "reschedule_confirmed"
+
+
+class PilotFlightStatus(StrEnum):
+    ASSIGNED = "assigned"
+    PENDING_CANCELLATION = "pending_cancellation"
+    CANCELLATION_CONFIRMED = "cancellation_confirmed"
+    PENDING_RESCHEDULE = "pending_reschedule"
+    RESCHEDULE_CONFIRMED = "reschedule_confirmed"
 
 
 class Airport(ApiModel):
@@ -283,6 +293,7 @@ class FlightUpdate(ApiModel):
     scheduled_arrival: datetime | None = None
     passengers: int | None = Field(default=None, ge=0, le=1000)
     notes: str | None = Field(default=None, max_length=2000)
+    sub_status: WorkflowSubStatus | None = None
 
 
 class Flight(FlightCreate):
@@ -298,6 +309,15 @@ class Flight(FlightCreate):
 class FlightStatusUpdate(ApiModel):
     status: FlightStatus
     occurred_at: datetime | None = None
+
+
+class PilotFlight(ApiModel):
+    id: str
+    pilot_id: str
+    flight_id: str
+    status: PilotFlightStatus = PilotFlightStatus.ASSIGNED
+    created_at: datetime
+    updated_at: datetime
 
 
 class TripRescheduleChanges(ApiModel):
