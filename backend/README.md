@@ -27,8 +27,13 @@ To store data elsewhere, set `PILOTGPT_DATA_DIR`. Set comma-separated `CORS_ORIG
 - `/api/v1/flights` — flight-leg CRUD and filters
 - `POST /api/v1/flights/{id}/status` — scheduled → departed → completed workflow, or cancellation
 - `/api/v1/fuel-logs` — fuel purchase CRUD and calculated total cost
+- `POST /api/v1/trips/{id}/reschedule-requests` — record requested trip itinerary changes
+- `POST /api/v1/flights/{id}/reschedule-requests` — record requested flight schedule changes
+- `/api/v1/reschedule-requests` — filterable historical reschedule reporting and resolution
 
 Trip approval verifies pilot status/medical validity, aircraft capacity/status, and scheduling conflicts. Flight scheduling verifies the approved assignment (when tied to a trip) and blocks aircraft or pilot overlaps. All datetimes must contain a timezone offset.
+
+Reschedule requests preserve who requested the change, their contact information and reason, the original values, desired values, and an append-only event history. Approving a request validates and applies the requested values; declining it leaves the schedule unchanged. Both outcomes remain available for historical reporting.
 
 ## Test it
 

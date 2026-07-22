@@ -13,12 +13,21 @@ from .models import (
     Dashboard,
     Flight,
     FlightCreate,
+    FlightRescheduleRequestCreate,
     FlightStatus,
     FuelLog,
     Pilot,
+    RescheduleChange,
+    RescheduleEvent,
+    RescheduleRequest,
+    RescheduleResolution,
+    RescheduleStatus,
+    RescheduleTarget,
     Trip,
     TripApproval,
+    TripRescheduleRequestCreate,
     TripStatus,
+    WorkflowSubStatus,
     utc_now,
 )
 from .storage import JsonStore
@@ -150,6 +159,168 @@ class SchedulingService:
         cancelled = Trip.model_validate(record)
         self.store.replace("trips", trip_id, cancelled.model_dump(mode="json"))
         return cancelled
+
+    def _validate_approved_trip_reschedule(self, trip: Trip) -> None:
+        if not trip.aircraft_id or not trip.pilot_ids:
+            raise HTTPException(status_code=409, detail="Approved trip is missing an aircraft or crew assignment")
+        aircraft = self.get("aircraft", trip.aircraft_id, Aircraft)
+        if aircraft.status != AircraftStatus.AVAILABLE:
+            raise HTTPException(status_code=409, detail="Aircraft is not available")
+        if aircraft.passenger_capacity < trip.passengers:
+            raise HTTPException(status_code=409, detail="Aircraft passenger capacity is too small")
+        for pilot_id in trip.pilot_ids:
+            pilot = self.get("pilots", pilot_id, Pilot)
+            if not pilot.active:
+                raise HTTPException(status_code=409, detail=f"Pilot {pilot_id} is inactive")
+            if pilot.medical_expires and pilot.medical_expires < trip.departure_at.date():
+                raise HTTPException(status_code=409, detail=f"Pilot {pilot_id} medical certificate is expired")
+        for other in self.list("trips", Trip):
+            if other.id == trip.id or other.status != TripStatus.APPROVED:
+                continue
+            if not self.overlaps(trip.departure_at, self._trip_end(trip), other.departure_at, self._trip_end(other)):
+                continue
+            if other.aircraft_id == trip.aircraft_id:
+                raise HTTPException(status_code=409, detail="Aircraft has a conflicting approved trip")
+            if set(other.pilot_ids) & set(trip.pilot_ids):
+                raise HTTPException(status_code=409, detail="A pilot has a conflicting approved trip")
+
+    def _ensure_no_pending_reschedule(self, target_type: RescheduleTarget, target_id: str) -> None:
+        target_field = "trip_id" if target_type == RescheduleTarget.TRIP else "flight_id"
+        if any(
+            item.get("status") == RescheduleStatus.PENDING and item.get(target_field) == target_id
+            for item in self.store.all("reschedule_requests")
+        ):
+            raise HTTPException(status_code=409, detail=f"A pending reschedule request already exists for this {target_type}")
+
+    def _create_reschedule_request(
+        self,
+        target_type: RescheduleTarget,
+        trip_id: str | None,
+        flight_id: str | None,
+        payload: TripRescheduleRequestCreate | FlightRescheduleRequestCreate,
+        original: Trip | Flight,
+    ) -> RescheduleRequest:
+        target_id = trip_id if target_type == RescheduleTarget.TRIP else flight_id
+        if not target_id:
+            raise HTTPException(status_code=422, detail="Reschedule target is required")
+        self._ensure_no_pending_reschedule(target_type, target_id)
+        requested_changes = payload.requested_changes.model_dump(mode="json", exclude_unset=True)
+        original_record = original.model_dump(mode="json")
+        original_values = {field: original_record.get(field) for field in requested_changes}
+        actual_changes = [
+            RescheduleChange(field=field, before=original_values[field], after=value)
+            for field, value in requested_changes.items()
+            if original_values[field] != value
+        ]
+        if not actual_changes:
+            raise HTTPException(status_code=422, detail="Requested schedule matches the current schedule")
+        requested_changes = {change.field: change.after for change in actual_changes}
+        original_values = {change.field: change.before for change in actual_changes}
+        now = utc_now()
+        event = RescheduleEvent(
+            id=str(uuid4()),
+            event_type="requested",
+            actor=payload.requested_by,
+            note=payload.reason,
+            changes=actual_changes,
+            created_at=now,
+        )
+        request = RescheduleRequest(
+            id=str(uuid4()),
+            target_type=target_type,
+            trip_id=trip_id,
+            flight_id=flight_id,
+            requested_by=payload.requested_by,
+            requester_contact=payload.requester_contact,
+            reason=payload.reason,
+            original_values=original_values,
+            requested_changes=requested_changes,
+            history=[event],
+            created_at=now,
+            updated_at=now,
+        )
+        collection = "trips" if target_type == RescheduleTarget.TRIP else "flights"
+        target_record = original.model_dump(mode="json") | {
+            "sub_status": WorkflowSubStatus.PENDING_RESCHEDULE,
+            "updated_at": now.isoformat(),
+        }
+        self.store.create("reschedule_requests", request.model_dump(mode="json"))
+        self.store.replace(collection, target_id, target_record)
+        return request
+
+    def request_trip_reschedule(self, trip_id: str, payload: TripRescheduleRequestCreate) -> RescheduleRequest:
+        trip = self.get("trips", trip_id, Trip)
+        if trip.status in {TripStatus.REJECTED, TripStatus.CANCELLED}:
+            raise HTTPException(status_code=409, detail=f"Cannot reschedule a {trip.status} trip")
+        changes = payload.requested_changes.model_dump(exclude_unset=True)
+        Trip.model_validate(trip.model_dump() | changes)
+        return self._create_reschedule_request(RescheduleTarget.TRIP, trip.id, None, payload, trip)
+
+    def request_flight_reschedule(self, flight_id: str, payload: FlightRescheduleRequestCreate) -> RescheduleRequest:
+        flight = self.get("flights", flight_id, Flight)
+        if flight.status != FlightStatus.SCHEDULED:
+            raise HTTPException(status_code=409, detail="Only scheduled flights can be rescheduled")
+        changes = payload.requested_changes.model_dump(exclude_unset=True)
+        Flight.model_validate(flight.model_dump() | changes)
+        return self._create_reschedule_request(RescheduleTarget.FLIGHT, flight.trip_id, flight.id, payload, flight)
+
+    def resolve_reschedule_request(self, request_id: str, resolution: RescheduleResolution) -> RescheduleRequest:
+        request = self.get("reschedule_requests", request_id, RescheduleRequest)
+        if request.status != RescheduleStatus.PENDING:
+            raise HTTPException(status_code=409, detail="Reschedule request has already been resolved")
+        collection = "trips" if request.target_type == RescheduleTarget.TRIP else "flights"
+        model = Trip if request.target_type == RescheduleTarget.TRIP else Flight
+        target_id = request.trip_id if request.target_type == RescheduleTarget.TRIP else request.flight_id
+        if not target_id:
+            raise HTTPException(status_code=409, detail="Reschedule request target is missing")
+        target = self.get(collection, target_id, model)
+        target_record = target.model_dump(mode="json")
+        stale_fields = [field for field, value in request.original_values.items() if target_record.get(field) != value]
+        if stale_fields:
+            fields = ", ".join(stale_fields)
+            raise HTTPException(status_code=409, detail=f"Schedule changed after this request was created: {fields}")
+
+        now = utc_now()
+        event_changes = [RescheduleChange(field="status", before=request.status, after=resolution.status)]
+        if resolution.status == RescheduleStatus.APPROVED:
+            if request.target_type == RescheduleTarget.TRIP:
+                candidate = Trip.model_validate(target.model_dump() | request.requested_changes)
+                self.validate_trip(candidate)
+                if candidate.status == TripStatus.APPROVED:
+                    self._validate_approved_trip_reschedule(candidate)
+            else:
+                if target.status != FlightStatus.SCHEDULED:
+                    raise HTTPException(status_code=409, detail="Only scheduled flights can be rescheduled")
+                candidate = Flight.model_validate(target.model_dump() | request.requested_changes)
+                self.validate_flight(candidate, exclude_id=target.id)
+            for field, after in request.requested_changes.items():
+                before = target_record.get(field)
+                if before != after:
+                    event_changes.append(RescheduleChange(field=field, before=before, after=after))
+            updated_target = candidate.model_dump(mode="json") | {
+                "sub_status": None,
+                "updated_at": now.isoformat(),
+            }
+        else:
+            updated_target = target_record | {"sub_status": None, "updated_at": now.isoformat()}
+
+        event = RescheduleEvent(
+            id=str(uuid4()),
+            event_type="applied" if resolution.status == RescheduleStatus.APPROVED else "declined",
+            actor=resolution.resolved_by,
+            note=resolution.note,
+            changes=event_changes,
+            created_at=now,
+        )
+        resolved = request.model_copy(update={
+            "status": resolution.status,
+            "history": [*request.history, event],
+            "updated_at": now,
+            "resolved_at": now,
+        })
+        self.store.replace(collection, target_id, updated_target)
+        self.store.replace("reschedule_requests", request.id, resolved.model_dump(mode="json"))
+        return resolved
 
     def validate_flight(self, flight: FlightCreate | Flight, exclude_id: str | None = None) -> None:
         if flight.scheduled_departure.tzinfo is None or flight.scheduled_arrival.tzinfo is None:

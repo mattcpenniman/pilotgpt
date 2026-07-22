@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator, model_validator
 
@@ -33,6 +33,21 @@ class FlightStatus(StrEnum):
     DEPARTED = "departed"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+
+
+class RescheduleTarget(StrEnum):
+    TRIP = "trip"
+    FLIGHT = "flight"
+
+
+class RescheduleStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    DECLINED = "declined"
+
+
+class WorkflowSubStatus(StrEnum):
+    PENDING_RESCHEDULE = "pending_reschedule"
 
 
 class PilotCreate(ApiModel):
@@ -167,6 +182,7 @@ class Trip(TripCreate):
     approved_by: str | None = None
     approved_at: datetime | None = None
     rejected_reason: str | None = None
+    sub_status: WorkflowSubStatus | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -240,6 +256,7 @@ class Flight(FlightCreate):
     status: FlightStatus = FlightStatus.SCHEDULED
     actual_departure: datetime | None = None
     actual_arrival: datetime | None = None
+    sub_status: WorkflowSubStatus | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -247,6 +264,124 @@ class Flight(FlightCreate):
 class FlightStatusUpdate(ApiModel):
     status: FlightStatus
     occurred_at: datetime | None = None
+
+
+class TripRescheduleChanges(ApiModel):
+    origin: str | None = Field(default=None, min_length=3, max_length=4)
+    destination: str | None = Field(default=None, min_length=3, max_length=4)
+    departure_at: datetime | None = None
+    return_at: datetime | None = None
+
+    @field_validator("origin", "destination")
+    @classmethod
+    def uppercase_airports(cls, value: str | None) -> str | None:
+        return value.upper() if value else value
+
+    @field_validator("departure_at", "return_at")
+    @classmethod
+    def require_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("datetime must include a timezone offset")
+        return value
+
+    @model_validator(mode="after")
+    def require_change(self) -> TripRescheduleChanges:
+        if not self.model_fields_set:
+            raise ValueError("at least one requested change is required")
+        return self
+
+
+class FlightRescheduleChanges(ApiModel):
+    origin: str | None = Field(default=None, min_length=3, max_length=4)
+    destination: str | None = Field(default=None, min_length=3, max_length=4)
+    scheduled_departure: datetime | None = None
+    scheduled_arrival: datetime | None = None
+    aircraft_id: str | None = None
+    pilot_ids: list[str] | None = Field(default=None, min_length=1)
+
+    @field_validator("origin", "destination")
+    @classmethod
+    def uppercase_airports(cls, value: str | None) -> str | None:
+        return value.upper() if value else value
+
+    @field_validator("scheduled_departure", "scheduled_arrival")
+    @classmethod
+    def require_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("datetime must include a timezone offset")
+        return value
+
+    @field_validator("pilot_ids")
+    @classmethod
+    def unique_pilots(cls, values: list[str] | None) -> list[str] | None:
+        if values is not None and len(values) != len(set(values)):
+            raise ValueError("pilot_ids must be unique")
+        return values
+
+    @model_validator(mode="after")
+    def require_change(self) -> FlightRescheduleChanges:
+        if not self.model_fields_set:
+            raise ValueError("at least one requested change is required")
+        return self
+
+
+class RescheduleRequestBase(ApiModel):
+    requested_by: str = Field(min_length=1, max_length=120)
+    requester_contact: str | None = Field(default=None, max_length=200)
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class TripRescheduleRequestCreate(RescheduleRequestBase):
+    requested_changes: TripRescheduleChanges
+
+
+class FlightRescheduleRequestCreate(RescheduleRequestBase):
+    requested_changes: FlightRescheduleChanges
+
+
+class RescheduleResolution(ApiModel):
+    status: RescheduleStatus
+    resolved_by: str = Field(min_length=1, max_length=120)
+    note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("status")
+    @classmethod
+    def require_final_status(cls, value: RescheduleStatus) -> RescheduleStatus:
+        if value == RescheduleStatus.PENDING:
+            raise ValueError("resolution status must be approved or declined")
+        return value
+
+
+class RescheduleChange(ApiModel):
+    field: str
+    before: Any = None
+    after: Any = None
+
+
+class RescheduleEvent(ApiModel):
+    id: str
+    event_type: str
+    actor: str
+    note: str | None = None
+    changes: list[RescheduleChange] = Field(default_factory=list)
+    created_at: datetime
+
+
+class RescheduleRequest(ApiModel):
+    id: str
+    target_type: RescheduleTarget
+    trip_id: str | None = None
+    flight_id: str | None = None
+    status: RescheduleStatus = RescheduleStatus.PENDING
+    requested_by: str
+    requester_contact: str | None = None
+    reason: str
+    original_values: dict[str, Any]
+    requested_changes: dict[str, Any]
+    history: list[RescheduleEvent]
+    created_at: datetime
+    updated_at: datetime
+    resolved_at: datetime | None = None
 
 
 class FuelLogCreate(ApiModel):

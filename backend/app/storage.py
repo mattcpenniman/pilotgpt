@@ -8,7 +8,7 @@ from threading import RLock
 from typing import Any
 
 
-COLLECTIONS = ("pilots", "aircraft", "trips", "flights", "fuel_logs")
+COLLECTIONS = ("pilots", "aircraft", "trips", "flights", "fuel_logs", "reschedule_requests")
 
 
 class JsonStore:

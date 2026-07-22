@@ -12,6 +12,7 @@ The project is a demo application. It uses JSON files for persistence and is des
 - Queue for approved trips that still need flight legs
 - Flight scheduling with aircraft and pilot conflict detection
 - Flight lifecycle tracking from scheduled to departed or completed
+- Auditable trip and flight reschedule requests with requester intent and before/after history
 - Fleet, pilot roster, and fuel-purchase management
 - Responsive React interface with built-in sample data when the API is unavailable
 - Interactive OpenAPI documentation for the backend
@@ -115,6 +116,7 @@ All application endpoints are under `/api/v1`.
 | `/trips` | Manage trip requests and approval workflow |
 | `/flights` | Manage flight legs, filters, and status transitions |
 | `/fuel-logs` | Manage fuel purchases and calculated costs |
+| `/reschedule-requests` | Historical reschedule requests, requested changes, and resolution events |
 
 Workflow actions include:
 
@@ -122,6 +124,9 @@ Workflow actions include:
 - `POST /api/v1/trips/{id}/reject`
 - `POST /api/v1/trips/{id}/cancel`
 - `POST /api/v1/flights/{id}/status`
+- `POST /api/v1/trips/{id}/reschedule-requests`
+- `POST /api/v1/flights/{id}/reschedule-requests`
+- `POST /api/v1/reschedule-requests/{id}/resolve`
 
 All API datetimes must include a timezone offset, such as `2030-08-01T09:00:00-04:00`.
 

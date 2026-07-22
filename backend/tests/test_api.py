@@ -193,3 +193,176 @@ def test_rejects_schedule_conflicts_and_duplicate_identifiers(tmp_path: Path) ->
     conflict = client.post(f"/api/v1/trips/{trip_ids[1]}/approve", json=assignment)
     assert conflict.status_code == 409
     assert "conflicting" in conflict.json()["detail"]
+
+
+def test_reschedule_requests_apply_changes_and_preserve_history(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    trip = client.post(
+        "/api/v1/trips",
+        json={
+            "customer_name": "Northwind Aviation",
+            "customer_email": "ops@northwind.example",
+            "origin": "KTEB",
+            "destination": "KPBI",
+            "departure_at": "2030-08-01T09:00:00-04:00",
+            "return_at": "2030-08-03T16:00:00-04:00",
+            "passengers": 5,
+        },
+    ).json()
+
+    requested = client.post(
+        f"/api/v1/trips/{trip['id']}/reschedule-requests",
+        json={
+            "requested_by": "Jordan Lee",
+            "requester_contact": "jordan@example.com",
+            "reason": "The customer needs to attend a later meeting.",
+            "requested_changes": {
+                "departure_at": "2030-08-02T11:30:00-04:00",
+                "return_at": "2030-08-04T18:00:00-04:00",
+            },
+        },
+    )
+    assert requested.status_code == 201
+    request = requested.json()
+    assert request["target_type"] == "trip"
+    assert request["status"] == "pending"
+    assert request["requested_by"] == "Jordan Lee"
+    assert request["reason"] == "The customer needs to attend a later meeting."
+    assert request["original_values"]["departure_at"] == "2030-08-01T09:00:00-04:00"
+    assert request["requested_changes"]["departure_at"] == "2030-08-02T11:30:00-04:00"
+    assert request["history"][0]["event_type"] == "requested"
+    assert {change["field"] for change in request["history"][0]["changes"]} == {
+        "departure_at",
+        "return_at",
+    }
+    assert client.get(f"/api/v1/trips/{trip['id']}").json()["sub_status"] == "pending_reschedule"
+
+    duplicate = client.post(
+        f"/api/v1/trips/{trip['id']}/reschedule-requests",
+        json={
+            "requested_by": "Jordan Lee",
+            "reason": "Another preference",
+            "requested_changes": {"departure_at": "2030-08-03T09:00:00-04:00"},
+        },
+    )
+    assert duplicate.status_code == 409
+
+    report = client.get(
+        "/api/v1/reschedule-requests",
+        params={"trip_id": trip["id"], "status": "pending"},
+    )
+    assert report.status_code == 200
+    assert [item["id"] for item in report.json()] == [request["id"]]
+
+    resolved = client.post(
+        f"/api/v1/reschedule-requests/{request['id']}/resolve",
+        json={
+            "status": "approved",
+            "resolved_by": "Maya Brooks, Dispatch",
+            "note": "Requested times are available.",
+        },
+    )
+    assert resolved.status_code == 200
+    resolution = resolved.json()
+    assert resolution["status"] == "approved"
+    assert resolution["resolved_at"] is not None
+    assert [event["event_type"] for event in resolution["history"]] == ["requested", "applied"]
+    applied_changes = {change["field"]: change for change in resolution["history"][1]["changes"]}
+    assert applied_changes["status"] == {"field": "status", "before": "pending", "after": "approved"}
+    assert applied_changes["departure_at"]["before"] == "2030-08-01T09:00:00-04:00"
+    assert applied_changes["departure_at"]["after"] == "2030-08-02T11:30:00-04:00"
+
+    updated_trip = client.get(f"/api/v1/trips/{trip['id']}").json()
+    assert updated_trip["departure_at"] == "2030-08-02T11:30:00-04:00"
+    assert updated_trip["return_at"] == "2030-08-04T18:00:00-04:00"
+    assert updated_trip["sub_status"] is None
+    assert client.post(
+        f"/api/v1/reschedule-requests/{request['id']}/resolve",
+        json={"status": "declined", "resolved_by": "Another dispatcher"},
+    ).status_code == 409
+
+    persisted = json.loads((tmp_path / "reschedule_requests.json").read_text())
+    assert persisted[0]["history"][0]["changes"][0]["before"] is not None
+    restarted_client = build_client(tmp_path)
+    historical = restarted_client.get(f"/api/v1/reschedule-requests/{request['id']}")
+    assert historical.status_code == 200
+    assert len(historical.json()["history"]) == 2
+
+
+def test_flight_reschedule_decline_records_request_without_changing_schedule(tmp_path: Path) -> None:
+    client = build_client(tmp_path)
+    pilot = client.post(
+        "/api/v1/pilots",
+        json={
+            "first_name": "Avery",
+            "last_name": "Stone",
+            "email": "avery@example.com",
+            "license_number": "ATP-1001",
+            "medical_expires": "2031-01-01",
+        },
+    ).json()
+    aircraft = client.post(
+        "/api/v1/aircraft",
+        json={
+            "tail_number": "N123PG",
+            "make": "Cessna",
+            "model": "Citation Latitude",
+            "passenger_capacity": 9,
+            "home_airport": "KTEB",
+        },
+    ).json()
+    trip = client.post(
+        "/api/v1/trips",
+        json={
+            "customer_name": "Contoso",
+            "origin": "KTEB",
+            "destination": "KBOS",
+            "departure_at": "2030-09-01T09:00:00-04:00",
+            "passengers": 4,
+        },
+    ).json()
+    client.post(
+        f"/api/v1/trips/{trip['id']}/approve",
+        json={"aircraft_id": aircraft["id"], "pilot_ids": [pilot["id"]], "approved_by": "Dispatch"},
+    )
+    flight = client.post(
+        "/api/v1/flights",
+        json={
+            "trip_id": trip["id"],
+            "flight_number": "PG401",
+            "aircraft_id": aircraft["id"],
+            "pilot_ids": [pilot["id"]],
+            "origin": "KTEB",
+            "destination": "KBOS",
+            "scheduled_departure": "2030-09-01T09:00:00-04:00",
+            "scheduled_arrival": "2030-09-01T10:15:00-04:00",
+            "passengers": 4,
+        },
+    ).json()
+
+    request = client.post(
+        f"/api/v1/flights/{flight['id']}/reschedule-requests",
+        json={
+            "requested_by": "Customer concierge",
+            "reason": "Passenger requested a later departure.",
+            "requested_changes": {
+                "scheduled_departure": "2030-09-01T11:00:00-04:00",
+                "scheduled_arrival": "2030-09-01T12:15:00-04:00",
+            },
+        },
+    ).json()
+    assert client.get(f"/api/v1/flights/{flight['id']}").json()["sub_status"] == "pending_reschedule"
+
+    declined = client.post(
+        f"/api/v1/reschedule-requests/{request['id']}/resolve",
+        json={
+            "status": "declined",
+            "resolved_by": "Dispatch",
+            "note": "Crew duty limits prevent the requested time.",
+        },
+    )
+    assert declined.status_code == 200
+    assert declined.json()["history"][-1]["note"] == "Crew duty limits prevent the requested time."
+    unchanged = client.get(f"/api/v1/flights/{flight['id']}").json()
+    assert unchanged["scheduled_departure"] == "2030-09-01T09:00:00-04:00"
+    assert unchanged["sub_status"] is None

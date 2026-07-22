@@ -9,8 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from .models import (
     Aircraft, AircraftCreate, AircraftStatus, AircraftUpdate, Dashboard,
     Flight, FlightCreate, FlightStatus, FlightStatusUpdate, FlightUpdate,
-    FuelLog, FuelLogCreate, FuelLogUpdate, Pilot, PilotCreate, PilotUpdate,
-    Trip, TripApproval, TripCreate, TripRejection, TripStatus, TripUpdate,
+    FlightRescheduleRequestCreate, FuelLog, FuelLogCreate, FuelLogUpdate,
+    Pilot, PilotCreate, PilotUpdate, RescheduleRequest, RescheduleResolution,
+    RescheduleStatus, RescheduleTarget, Trip, TripApproval, TripCreate,
+    TripRejection, TripRescheduleRequestCreate, TripStatus, TripUpdate,
 )
 from .service import SchedulingService
 from .storage import JsonStore
@@ -131,6 +133,24 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     def cancel_trip(trip_id: str) -> Trip:
         return service.cancel_trip(trip_id)
 
+    @router.get(
+        "/trips/{trip_id}/reschedule-requests",
+        response_model=list[RescheduleRequest],
+        tags=["rescheduling"],
+    )
+    def list_trip_reschedule_requests(trip_id: str) -> list[RescheduleRequest]:
+        service.get("trips", trip_id, Trip)
+        return [item for item in service.list("reschedule_requests", RescheduleRequest) if item.trip_id == trip_id]
+
+    @router.post(
+        "/trips/{trip_id}/reschedule-requests",
+        response_model=RescheduleRequest,
+        status_code=status.HTTP_201_CREATED,
+        tags=["rescheduling"],
+    )
+    def request_trip_reschedule(trip_id: str, payload: TripRescheduleRequestCreate) -> RescheduleRequest:
+        return service.request_trip_reschedule(trip_id, payload)
+
     @router.delete("/trips/{trip_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["trips"])
     def delete_trip(trip_id: str) -> Response:
         service.delete("trips", trip_id, Trip)
@@ -175,6 +195,24 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     def change_flight_status(flight_id: str, payload: FlightStatusUpdate) -> Flight:
         return service.change_flight_status(flight_id, payload.status, payload.occurred_at)
 
+    @router.get(
+        "/flights/{flight_id}/reschedule-requests",
+        response_model=list[RescheduleRequest],
+        tags=["rescheduling"],
+    )
+    def list_flight_reschedule_requests(flight_id: str) -> list[RescheduleRequest]:
+        service.get("flights", flight_id, Flight)
+        return [item for item in service.list("reschedule_requests", RescheduleRequest) if item.flight_id == flight_id]
+
+    @router.post(
+        "/flights/{flight_id}/reschedule-requests",
+        response_model=RescheduleRequest,
+        status_code=status.HTTP_201_CREATED,
+        tags=["rescheduling"],
+    )
+    def request_flight_reschedule(flight_id: str, payload: FlightRescheduleRequestCreate) -> RescheduleRequest:
+        return service.request_flight_reschedule(flight_id, payload)
+
     @router.delete("/flights/{flight_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["flights"])
     def delete_flight(flight_id: str) -> Response:
         service.delete("flights", flight_id, Flight)
@@ -209,6 +247,35 @@ def create_app(data_dir: Path | None = None) -> FastAPI:
     def delete_fuel_log(fuel_log_id: str) -> Response:
         service.delete("fuel_logs", fuel_log_id, FuelLog)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.get("/reschedule-requests", response_model=list[RescheduleRequest], tags=["rescheduling"])
+    def list_reschedule_requests(
+        target_type: RescheduleTarget | None = None,
+        request_status: RescheduleStatus | None = Query(default=None, alias="status"),
+        trip_id: str | None = None,
+        flight_id: str | None = None,
+    ) -> list[RescheduleRequest]:
+        records = service.list("reschedule_requests", RescheduleRequest)
+        filtered = [
+            item for item in records
+            if (target_type is None or item.target_type == target_type)
+            and (request_status is None or item.status == request_status)
+            and (trip_id is None or item.trip_id == trip_id)
+            and (flight_id is None or item.flight_id == flight_id)
+        ]
+        return sorted(filtered, key=lambda item: item.created_at, reverse=True)
+
+    @router.get("/reschedule-requests/{request_id}", response_model=RescheduleRequest, tags=["rescheduling"])
+    def get_reschedule_request(request_id: str) -> RescheduleRequest:
+        return service.get("reschedule_requests", request_id, RescheduleRequest)
+
+    @router.post(
+        "/reschedule-requests/{request_id}/resolve",
+        response_model=RescheduleRequest,
+        tags=["rescheduling"],
+    )
+    def resolve_reschedule_request(request_id: str, payload: RescheduleResolution) -> RescheduleRequest:
+        return service.resolve_reschedule_request(request_id, payload)
 
     app.include_router(router)
     return app
