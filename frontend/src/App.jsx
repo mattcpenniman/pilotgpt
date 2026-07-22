@@ -35,6 +35,24 @@ const durationFmt = (minutes) => {
   const remaining = rounded % 60;
   return hours ? `${hours}h ${remaining}m` : `${remaining}m`;
 };
+const workflowKey = (value='') => `${value}`.toLowerCase().replaceAll('-','_').replaceAll(' ','_');
+const pendingSchedulingStatuses = ['pending_cancellation','pending_reschedule','needs_rescheduling'];
+const getSchedulingWork = (trip, flights) => {
+  const linked=flights.filter(f=>f.trip_id===trip.id&&f.status!=='cancelled');
+  const affected=linked.filter(f=>pendingSchedulingStatuses.includes(workflowKey(f.sub_status)));
+  const tripWorkflow=workflowKey(trip.sub_status||trip.workflow_status);
+  const workflow=pendingSchedulingStatuses.includes(tripWorkflow)?tripWorkflow:workflowKey(affected[0]?.sub_status);
+  return workflow?{workflow,affected}:null;
+};
+const needsScheduling = (trip, flights) => trip.status==='approved'&&(
+  getSchedulingWork(trip,flights)||!flights.some(f=>f.trip_id===trip.id&&f.status!=='cancelled')
+);
+const describeAffectedLegs = (flights) => {
+  if (!flights.length) return '';
+  if (flights.length===1) return `${flights[0].flight_number}: ${flights[0].origin} to ${flights[0].destination}`;
+  const numbers=flights.map(f=>f.flight_number);
+  return numbers.length<=2?numbers.join(', '):`${numbers.slice(0,2).join(', ')} + ${numbers.length-2} more`;
+};
 const calculateFlightEstimates = (distanceNm, aircraft) => {
   if (!distanceNm || !aircraft?.cruise_speed_kts || !aircraft?.fuel_burn_gph) return null;
   const flightHours = distanceNm / aircraft.cruise_speed_kts;
@@ -74,7 +92,7 @@ function Header({ current, query, setQuery, onCreate, demo, setDemo, sidebarOpen
 }
 
 function Sidebar({ current, setCurrent, open, close, data }) {
-  const unscheduledCount=data.trips.filter(t=>t.status==='approved'&&!data.flights.some(f=>f.trip_id===t.id&&f.status!=='cancelled')).length;
+  const unscheduledCount=data.trips.filter(t=>needsScheduling(t,data.flights)).length;
   return <aside className={`sidebar ${open ? 'open' : ''}`}>
     <div className="brand"><span className="brand-mark"><Plane size={20}/></span><strong>Pilot<span>GPT</span></strong><button className="sidebar-close" onClick={close}><X size={18}/></button></div>
     <div className="workspace"><span>PA</span><div><b>Private Aviation</b><small>Flight operations</small></div><ChevronDown size={15}/></div>
@@ -175,14 +193,16 @@ const TIMELINE_STAGES = [
 
 function getTripTimelineState(trip, flights) {
   const linked = flights.filter(f=>f.trip_id===trip.id&&f.status!=='cancelled');
-  const raw = `${trip.sub_status||trip.workflow_status||trip.status||''}`.toLowerCase().replaceAll('-','_').replaceAll(' ','_');
-  const flightPendingReschedule = linked.some(f=>`${f.sub_status||f.status||''}`.toLowerCase().replaceAll('-','_').includes('pending_resched'));
-  const flightPendingCancellation = linked.some(f=>`${f.sub_status||f.status||''}`.toLowerCase().replaceAll('-','_').includes('pending_cancel'));
+  const raw = workflowKey(trip.sub_status||trip.workflow_status||trip.status);
+  const pendingRescheduleFlights = linked.filter(f=>workflowKey(f.sub_status||f.status).includes('pending_resched'));
+  const pendingCancellationFlights = linked.filter(f=>workflowKey(f.sub_status||f.status).includes('pending_cancel'));
+  const flightPendingReschedule = pendingRescheduleFlights.length>0;
+  const flightPendingCancellation = pendingCancellationFlights.length>0;
   const hasDeparted = linked.some(f=>['departed','in_progress'].includes(f.status)||f.actual_departure);
 
-  if (flightPendingCancellation||raw.includes('pending_cancel')) return { stage:hasDeparted?'in_progress':'trip_pending', detail:hasDeparted?'Flight pending cancellation':'Pending cancellation', tone:'attention' };
+  if (flightPendingCancellation||raw.includes('pending_cancel')) return { stage:hasDeparted?'in_progress':'trip_pending', detail:hasDeparted?'Flight pending cancellation':'Pending cancellation', description:describeAffectedLegs(pendingCancellationFlights), tone:'attention' };
   if (['complete','completed'].includes(raw)||linked.length&&linked.every(f=>f.status==='completed')) return { stage:'complete', detail:'Completed', tone:'complete' };
-  if (flightPendingReschedule||(raw.includes('pending_resched')&&(hasDeparted||raw.includes('flight')))) return { stage:'in_progress', detail:'Flight pending reschedule', tone:'attention' };
+  if (flightPendingReschedule||(raw.includes('pending_resched')&&(hasDeparted||raw.includes('flight')))) return { stage:'in_progress', detail:pendingRescheduleFlights.length===1?'1 leg pending reschedule':`${pendingRescheduleFlights.length||linked.length} legs pending reschedule`, description:describeAffectedLegs(pendingRescheduleFlights), tone:'attention' };
   if (hasDeparted) return { stage:'in_progress', detail:'Flight in progress', tone:'active' };
   if (raw.includes('pending_resched')) return { stage:'trip_pending', detail:'Pending reschedule', tone:'attention' };
   if (raw==='needs_rescheduling') return { stage:'trip_pending', detail:'Needs rescheduling', tone:'attention' };
@@ -212,7 +232,7 @@ function TripTimelinePage({ data, onDetails }) {
         <div className="timeline-header"><div className="timeline-trip-heading"><span>Trip</span><small>Departure date</small></div>{TIMELINE_STAGES.map((stage,index)=><div key={stage.id} className="timeline-stage-heading"><i>{index+1}</i><span>{stage.label}<small>{stage.copy}</small></span></div>)}</div>
         {filtered.map(trip=>{const activeIndex=TIMELINE_STAGES.findIndex(stage=>stage.id===trip.timeline.stage);const linked=data.flights.filter(f=>f.trip_id===trip.id&&f.status!=='cancelled');return <div className="timeline-row" key={trip.id}>
           <button className="timeline-trip" onClick={()=>onDetails(trip)}><div className="timeline-date"><strong>{dateFmt(trip.departure_at,{day:'2-digit'})}</strong><span>{new Intl.DateTimeFormat('en-US',{month:'short',year:'numeric'}).format(new Date(trip.departure_at))}</span></div><div><b>{trip.customer_name}</b><span className="timeline-route"><code>{trip.origin}</code><ArrowRight size={12}/><code>{trip.destination}</code></span><small>{timeFmt(trip.departure_at)} · {trip.passengers} pax</small></div><ChevronRight className="timeline-open" size={15}/></button>
-          {TIMELINE_STAGES.map((stage,index)=><div key={stage.id} className={`timeline-cell ${index<activeIndex?'passed':''} ${index===activeIndex?'current':''}`}><div className="timeline-stage-row"><span className="timeline-track"><i>{index<activeIndex?<Check size={11}/>:null}</i></span></div><div className="timeline-substatus-row">{index===activeIndex&&<div className={`timeline-status ${trip.timeline.tone}`}><span>{trip.timeline.detail}</span>{linked.length>0&&<small>{linked.length} flight {linked.length===1?'leg':'legs'}</small>}</div>}</div></div>)}
+          {TIMELINE_STAGES.map((stage,index)=><div key={stage.id} className={`timeline-cell ${index<activeIndex?'passed':''} ${index===activeIndex?'current':''}`}><div className="timeline-stage-row"><span className="timeline-track"><i>{index<activeIndex?<Check size={11}/>:null}</i></span></div><div className="timeline-substatus-row">{index===activeIndex&&<div className={`timeline-status ${trip.timeline.tone}`}><span>{trip.timeline.detail}</span>{(trip.timeline.description||linked.length>0)&&<small title={trip.timeline.description||undefined}>{trip.timeline.description||`${linked.length} flight ${linked.length===1?'leg':'legs'}`}</small>}</div>}</div></div>)}
         </div>})}
         {!filtered.length&&<Empty icon={ChartNoAxesGantt} title="No trips in this view" copy="Choose another filter to see the rest of the trip timeline."/>}
       </div>
@@ -220,9 +240,9 @@ function TripTimelinePage({ data, onDetails }) {
   </main>;
 }
 
-function UnscheduledPage({ data, onSchedule }) {
-  const trips=data.trips.filter(t=>t.status==='approved'&&!data.flights.some(f=>f.trip_id===t.id&&f.status!=='cancelled')).sort((a,b)=>new Date(a.departure_at)-new Date(b.departure_at));
-  return <main className="content inner-page"><PageHeading eyebrow="Dispatch queue" title="Approved trips to schedule" copy="Build flight legs for approved travel that has not reached the operations schedule."/><div className="queue-summary"><div><span><Clock3 size={18}/></span><p>Awaiting scheduling<strong>{trips.length}</strong></p></div><div><span><CalendarDays size={18}/></span><p>Next requested departure<strong>{trips.length?dateFmt(trips[0].departure_at,{weekday:'short'}):'All clear'}</strong></p></div><div><span><Users size={18}/></span><p>Travelers waiting<strong>{trips.reduce((sum,t)=>sum+t.passengers,0)}</strong></p></div></div>{trips.length?<section className="panel unscheduled-table"><div className="unscheduled-head"><span>Customer</span><span>Route</span><span>Requested departure</span><span>Passengers</span><span>Aircraft & crew</span><span></span></div>{trips.map(trip=>{const aircraft=data.aircraft.find(a=>a.id===trip.aircraft_id);const pilots=data.pilots.filter(p=>trip.pilot_ids?.includes(p.id));return <div className="unscheduled-row" key={trip.id}><div className="unscheduled-customer"><span className="customer-avatar">{trip.customer_name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><span><b>{trip.customer_name}</b><small>{trip.purpose||'Private charter'}</small></span></div><div className="compact-route"><b>{trip.origin}</b><ArrowRight size={13}/><b>{trip.destination}</b></div><div className="date-cell"><b>{dateFmt(trip.departure_at,{weekday:'short',year:'numeric'})}</b><small>{timeFmt(trip.departure_at)}</small></div><span className="passenger-cell"><Users size={14}/>{trip.passengers}</span><div className="assigned-cell"><span><Plane size={14}/>{aircraft?`${aircraft.tail_number} · ${aircraft.model}`:'Aircraft not assigned'}</span><span><Users size={14}/>{pilots.length?pilots.map(p=>`${p.first_name} ${p.last_name}`).join(', '):'Crew not assigned'}</span></div><button className="schedule-button" disabled={!trip.aircraft_id||!trip.pilot_ids?.length} onClick={()=>onSchedule(trip)}>Schedule leg <ArrowRight size={14}/></button></div>})}</section>:<section className="panel"><Empty icon={Check} title="Every approved trip is scheduled" copy="Newly approved trips will appear here until their first flight leg is created."/></section>}</main>;
+function UnscheduledPage({ data, onSchedule, onDetails=()=>{} }) {
+  const trips=data.trips.filter(t=>needsScheduling(t,data.flights)).map(t=>({...t,scheduling:getSchedulingWork(t,data.flights)})).sort((a,b)=>new Date(a.departure_at)-new Date(b.departure_at));
+  return <main className="content inner-page"><PageHeading eyebrow="Dispatch queue" title="Needs scheduling" copy="Build unscheduled flight legs and review pending reschedules or cancellations."/><div className="queue-summary"><div><span><Clock3 size={18}/></span><p>Trips needing action<strong>{trips.length}</strong></p></div><div><span><CalendarDays size={18}/></span><p>Next affected departure<strong>{trips.length?dateFmt(trips[0].departure_at,{weekday:'short'}):'All clear'}</strong></p></div><div><span><Users size={18}/></span><p>Travelers affected<strong>{trips.reduce((sum,t)=>sum+t.passengers,0)}</strong></p></div></div>{trips.length?<section className="panel unscheduled-table"><div className="unscheduled-head"><span>Customer</span><span>Route</span><span>Requested departure</span><span>Passengers</span><span>Aircraft & crew</span><span></span></div>{trips.map(trip=>{const aircraft=data.aircraft.find(a=>a.id===trip.aircraft_id);const pilots=data.pilots.filter(p=>trip.pilot_ids?.includes(p.id));return <div className="unscheduled-row" key={trip.id}><div className="unscheduled-customer"><span className="customer-avatar">{trip.customer_name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><span><b>{trip.customer_name}</b><small>{trip.purpose||'Private charter'}</small>{trip.scheduling&&<span className="queue-workflow"><Badge status={trip.scheduling.workflow}/><small>{trip.scheduling.affected.length?`${trip.scheduling.affected.length} affected ${trip.scheduling.affected.length===1?'leg':'legs'}`:'Trip workflow'}</small></span>}</span></div><div className="compact-route"><b>{trip.origin}</b><ArrowRight size={13}/><b>{trip.destination}</b></div><div className="date-cell"><b>{dateFmt(trip.departure_at,{weekday:'short',year:'numeric'})}</b><small>{timeFmt(trip.departure_at)}</small></div><span className="passenger-cell"><Users size={14}/>{trip.passengers}</span><div className="assigned-cell"><span><Plane size={14}/>{aircraft?`${aircraft.tail_number} · ${aircraft.model}`:'Aircraft not assigned'}</span><span><Users size={14}/>{pilots.length?pilots.map(p=>`${p.first_name} ${p.last_name}`).join(', '):'Crew not assigned'}</span></div><button className="schedule-button" disabled={!trip.scheduling&&(!trip.aircraft_id||!trip.pilot_ids?.length)} onClick={()=>trip.scheduling?onDetails(trip):onSchedule(trip)}>{trip.scheduling?'Review status':'Schedule leg'} <ArrowRight size={14}/></button></div>})}</section>:<section className="panel"><Empty icon={Check} title="No trips need scheduling" copy="New approvals and pending schedule changes will appear here."/></section>}</main>;
 }
 
 function FleetCard({ aircraft, onEdit }) {

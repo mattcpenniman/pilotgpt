@@ -1,0 +1,18 @@
+.queue-workflow {
+  margin-top: 5px;
+  display: flex !important;
+  align-items: center;
+  gap: 5px;
+}
+
+.queue-workflow .badge {
+  font-size: 6px;
+}
+
+.queue-workflow small {
+  margin: 0 !important;
+}
+
+.unscheduled-row:has(.queue-workflow) .schedule-button {
+  display: none;
+}

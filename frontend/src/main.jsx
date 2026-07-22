@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles.css';
 import './unscheduled.css';
+import './queue-workflow.css';
 import './timeline.css';
 import './trip-details.css';
 import './airport-edit.css';
